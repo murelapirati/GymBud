@@ -25,10 +25,14 @@ export default function MiniActivityRings({
   
   const center = size / 2;
   
-  // Cap progress at 100%
-  const cappedStepsProgress = Math.min(stepsProgress, 100);
-  const cappedExerciseProgress = Math.min(exerciseProgress, 100);
-  const cappedCaloriesProgress = Math.min(caloriesProgress, 100);
+  // Ensure progress values are valid percentages (0-100 for main, 0-200 for overage support)
+  const cappedStepsProgress = Math.max(0, Math.min(stepsProgress, 100));
+  const cappedExerciseProgress = Math.max(0, Math.min(exerciseProgress, 100));
+  
+  // For calories, we need to handle overage (can go beyond 100%)
+  const consumedCaloriesProgress = Math.min(Math.max(caloriesProgress, 0), 100);
+  const overCaloriesProgress = Math.max(caloriesProgress - 100, 0);
+  const cappedOverCaloriesProgress = Math.min(overCaloriesProgress, 100);
   
   // Calculate circumferences
   const getCircumference = (radius: number) => 2 * Math.PI * radius;
@@ -50,31 +54,47 @@ export default function MiniActivityRings({
           cx={center}
           cy={center}
           r={outerRadius}
-          stroke="rgba(255, 59, 48, 0.15)"
+          stroke="rgba(255, 59, 48, 0.12)"
           strokeWidth={strokeWidth}
           fill="none"
         />
-        {/* Outer Ring - Progress */}
+        {/* Outer Ring - Consumed calories up to 100% (Primary color) */}
         <Circle
           cx={center}
           cy={center}
           r={outerRadius}
-          stroke="#FF453A"
+          stroke="#FF3B30"
           strokeWidth={strokeWidth}
           fill="none"
           strokeDasharray={outerCircumference}
-          strokeDashoffset={getStrokeDashoffset(outerCircumference, cappedCaloriesProgress)}
+          strokeDashoffset={getStrokeDashoffset(outerCircumference, consumedCaloriesProgress)}
           strokeLinecap="round"
           rotation="-90"
           origin={`${center}, ${center}`}
         />
+        {/* Outer Ring - Overage (Red overlay) - only shows when over 100% */}
+        {overCaloriesProgress > 0 && (
+          <Circle
+            cx={center}
+            cy={center}
+            r={outerRadius}
+            stroke="#D32F2F"
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={outerCircumference}
+            strokeDashoffset={getStrokeDashoffset(outerCircumference, cappedOverCaloriesProgress)}
+            strokeLinecap="round"
+            rotation="-90"
+            origin={`${center}, ${center}`}
+          />
+        )}
         
         {/* Middle Ring - Exercise Minutes (Green) - Background */}
         <Circle
           cx={center}
           cy={center}
           r={middleRadius}
-          stroke="rgba(52, 199, 89, 0.15)"
+          stroke="rgba(52, 199, 89, 0.12)"
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -83,7 +103,7 @@ export default function MiniActivityRings({
           cx={center}
           cy={center}
           r={middleRadius}
-          stroke="#32D74B"
+          stroke="#34C759"
           strokeWidth={strokeWidth}
           fill="none"
           strokeDasharray={middleCircumference}
@@ -98,7 +118,7 @@ export default function MiniActivityRings({
           cx={center}
           cy={center}
           r={innerRadius}
-          stroke="rgba(83, 131, 184, 0.15)"
+          stroke="rgba(83, 131, 184, 0.12)"
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -107,7 +127,7 @@ export default function MiniActivityRings({
           cx={center}
           cy={center}
           r={innerRadius}
-          stroke="#0A84FF"
+          stroke="#5383B8"
           strokeWidth={strokeWidth}
           fill="none"
           strokeDasharray={innerCircumference}

@@ -6,11 +6,13 @@ export const STORAGE_KEYS = {
   CALORIES: '@gymapp_calories',
   WORKOUTS: '@gymapp_workouts',
   WORKOUT_HISTORY: '@gymapp_workout_history',
+  DAILY_ACTIVITY: '@gymapp_daily_activity',
   RECIPES: '@gymapp_recipes',
   GOALS: '@gymapp_goals',
   GOAL_PRESETS: '@gymapp_goal_presets',
   WORKOUT_GOALS: '@gymapp_workout_goals',
   STEP_OFFSET: '@gymapp_step_offset',
+  STEP_MULTIPLIER: '@gymapp_step_multiplier',
 } as const;
 
 // Generic storage functions

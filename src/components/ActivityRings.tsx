@@ -31,10 +31,15 @@ export default function ActivityRings({
   
   const center = size / 2;
   
-  // Calculate progress percentages (cap at 100%)
-  const stepsProgress = Math.min((steps / stepsGoal) * 100, 100);
-  const exerciseProgress = Math.min((exerciseMinutes / exerciseGoal) * 100, 100);
-  const caloriesProgress = Math.min((caloriesBurned / caloriesGoal) * 100, 100);
+  // Calculate progress percentages with division by zero protection
+  const stepsProgress = stepsGoal > 0 ? Math.min((steps / stepsGoal) * 100, 100) : 0;
+  const exerciseProgress = exerciseGoal > 0 ? Math.min((exerciseMinutes / exerciseGoal) * 100, 100) : 0;
+  
+  // For calories, handle overage separately
+  const caloriesRawProgress = caloriesGoal > 0 ? (caloriesBurned / caloriesGoal) * 100 : 0;
+  const caloriesProgress = Math.min(caloriesRawProgress, 100);
+  const caloriesOverProgress = Math.max(caloriesRawProgress - 100, 0);
+  const cappedCaloriesOverProgress = Math.min(caloriesOverProgress, 100);
   
   // Calculate circumferences
   const getCircumference = (radius: number) => 2 * Math.PI * radius;
@@ -61,7 +66,7 @@ export default function ActivityRings({
           strokeWidth={strokeWidth}
           fill="none"
         />
-        {/* Progress */}
+        {/* Progress up to 100% */}
         <Circle
           cx={center}
           cy={center}
@@ -75,6 +80,22 @@ export default function ActivityRings({
           rotation="-90"
           origin={`${center}, ${center}`}
         />
+        {/* Overage indicator (darker red) - only shows when over 100% */}
+        {caloriesOverProgress > 0 && (
+          <Circle
+            cx={center}
+            cy={center}
+            r={outerRadius}
+            stroke="#D32F2F"
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={outerCircumference}
+            strokeDashoffset={getStrokeDashoffset(outerCircumference, cappedCaloriesOverProgress)}
+            strokeLinecap="round"
+            rotation="-90"
+            origin={`${center}, ${center}`}
+          />
+        )}
         
         {/* Middle Ring - Exercise Minutes (Green) */}
         {/* Background */}

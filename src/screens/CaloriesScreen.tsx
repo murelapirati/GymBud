@@ -8,6 +8,8 @@ import {
   Modal,
   TextInput,
   ScrollView,
+      KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -89,7 +91,14 @@ const MiniCalendarCircle = ({ progress, isOverLimit }: { progress: number; isOve
   const strokeWidth = 2.5;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (Math.min(progress, 100) / 100) * circumference;
+  
+  // Calculate progress for consumed (capped at 100%)
+  const consumedProgress = Math.min(progress, 100);
+  const consumedOffset = circumference - (consumedProgress / 100) * circumference;
+  
+  // Calculate overage progress (only when over 100%)
+  const overProgress = Math.max(progress - 100, 0);
+  const overOffset = circumference - (Math.min(overProgress, 100) / 100) * circumference;
 
   return (
     <View style={{ width: size, height: size }}>
@@ -103,19 +112,34 @@ const MiniCalendarCircle = ({ progress, isOverLimit }: { progress: number; isOve
           strokeWidth={strokeWidth}
           fill="none"
         />
-        {/* Progress circle */}
+        {/* Consumed calories circle (blue) - always shows up to 100% */}
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={isOverLimit ? '#F44336' : '#2196F3'}
+          stroke="#2196F3"
           strokeWidth={strokeWidth}
           fill="none"
           strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
+          strokeDashoffset={consumedOffset}
           strokeLinecap="round"
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
+        {/* Over limit circle (red) - only shows when over 100% */}
+        {isOverLimit && overProgress > 0 && (
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="#F44336"
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={overOffset}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        )}
       </Svg>
     </View>
   );
@@ -300,7 +324,8 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
   const getProgressPercentage = (dateString: string) => {
     if (!allDatesData[dateString]) return 0;
     const dayTotal = allDatesData[dateString].reduce((sum, entry) => sum + entry.calories, 0);
-    return Math.min((dayTotal / goalCalories) * 100, 100);
+    // Don't cap at 100% - allow overage to be displayed
+    return (dayTotal / goalCalories) * 100;
   };
 
   return (
@@ -418,61 +443,72 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
         animationType="fade"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Add Food</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={28} color={theme.text} />
-              </TouchableOpacity>
-            </View>
+        <TouchableOpacity 
+          activeOpacity={1} 
+          style={styles.modalOverlay}
+          onPress={() => setShowAddModal(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardAvoidingView}
+          >
+            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+              <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: theme.text }]}>Add Food</Text>
+                  <TouchableOpacity onPress={() => setShowAddModal(false)}>
+                    <Ionicons name="close" size={28} color={theme.text} />
+                  </TouchableOpacity>
+                </View>
 
-            <ScrollView contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.text }]}>Protein (grams)</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                  placeholder="0"
-                  placeholderTextColor={theme.textSecondary}
-                  keyboardType="decimal-pad"
-                  value={protein}
-                  onChangeText={setProtein}
-                />
+                <ScrollView contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.text }]}>Protein (grams)</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                      placeholder="0"
+                      placeholderTextColor={theme.textSecondary}
+                      keyboardType="decimal-pad"
+                      value={protein}
+                      onChangeText={setProtein}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.text }]}>Carbs (grams)</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                      placeholder="0"
+                      placeholderTextColor={theme.textSecondary}
+                      keyboardType="decimal-pad"
+                      value={carbs}
+                      onChangeText={setCarbs}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.text }]}>Fats (grams)</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                      placeholder="0"
+                      placeholderTextColor={theme.textSecondary}
+                      keyboardType="decimal-pad"
+                      value={fats}
+                      onChangeText={setFats}
+                    />
+                  </View>
+
+                  <TouchableOpacity 
+                    style={[styles.submitButton, { backgroundColor: theme.primary }]}
+                    onPress={handleAddFood}
+                  >
+                    <Text style={styles.submitButtonText}>Add</Text>
+                  </TouchableOpacity>
+                </ScrollView>
               </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.text }]}>Carbs (grams)</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                  placeholder="0"
-                  placeholderTextColor={theme.textSecondary}
-                  keyboardType="decimal-pad"
-                  value={carbs}
-                  onChangeText={setCarbs}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.text }]}>Fats (grams)</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                  placeholder="0"
-                  placeholderTextColor={theme.textSecondary}
-                  keyboardType="decimal-pad"
-                  value={fats}
-                  onChangeText={setFats}
-                />
-              </View>
-
-              <TouchableOpacity 
-                style={[styles.submitButton, { backgroundColor: theme.primary }]}
-                onPress={handleAddFood}
-              >
-                <Text style={styles.submitButtonText}>Add</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
       </Modal>
 
       <Modal
@@ -722,12 +758,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     paddingHorizontal: 20,
   },
+  keyboardAvoidingView: {
+    width: '100%',
+    maxWidth: 400,
+  },
   modalContent: {
     borderRadius: 20,
     padding: 20,
     width: '100%',
-    maxWidth: 400,
-    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',

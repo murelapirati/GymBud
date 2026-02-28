@@ -10,36 +10,77 @@ import {
   Alert,
   Platform,
   AppState,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import { Pedometer } from 'expo-sensors';
 import { useTheme } from '../context/ThemeContext';
+import { useActiveWorkout } from '../context/ActiveWorkoutContext';
 import { storage, STORAGE_KEYS } from '../utils/storage';
+import { healthService } from '../utils/healthService';
 import ActivityRings from '../components/ActivityRings';
 import MiniActivityRings from '../components/MiniActivityRings';
+import { ActivityRingsCard } from '../components/workout/ActivityRingsCard';
+import { StepCounterCard } from '../components/workout/StepCounterCard';
+import { WorkoutCard } from '../components/workout/WorkoutCard';
+import { WorkoutHistoryCard } from '../components/workout/WorkoutHistoryCard';
+import { EditNotesModal } from '../components/workout/EditNotesModal';
+import { EditWorkoutModal } from '../components/workout/EditWorkoutModal';
+import { CalendarModal } from '../components/workout/CalendarModal';
+import { ActiveWorkoutModal } from '../components/workout/ActiveWorkoutModal';
+import { WorkoutTypeSelectionModal, type WorkoutType } from '../components/workout/WorkoutTypeSelectionModal';
 
 interface WorkoutsScreenProps {
   onOpenSettings: () => void;
+  onStartWorkout: () => void;
+}
+
+interface WorkoutSet {
+  id: string;
+  reps: number;
+  weight?: number;
+  completed: boolean;
+  completedAt?: number; // timestamp
 }
 
 interface WorkoutExercise {
   id: string;
   name: string;
-  sets: number;
-  reps: number;
-  weight?: number;
+  sets: WorkoutSet[];
+  restTimer?: number; // seconds
+  previousWeight?: number; // from last workout
+  previousReps?: number;
 }
 
 interface WorkoutSession {
   id: string;
   date: string;
+  title?: string;
+  workoutType?: WorkoutType;
   exercises: WorkoutExercise[];
   notes?: string;
   duration?: number;
+  intensity?: number; // 0-10 scale
+  startTime?: number;
+  endTime?: number;
 }
 
 interface WorkoutHistory {
-  [date: string]: WorkoutSession;
+  [date: string]: WorkoutSession[]; // Changed to array to support multiple workouts per day
+}
+
+interface DailyActivityData {
+  date: string;
+  steps: number;
+  exerciseMinutes: number;
+  caloriesBurned: number;
+}
+
+interface DailyActivityHistory {
+  [date: string]: DailyActivityData;
 }
 
 const getTodayDate = () => {
@@ -47,17 +88,35 @@ const getTodayDate = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 };
 
-export default function WorkoutsScreen({ onOpenSettings }: WorkoutsScreenProps) {
+export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: WorkoutsScreenProps) {
   const { theme } = useTheme();
+  const { startWorkout: contextStartWorkout, isWorkoutActive, workoutDuration } = useActiveWorkout();
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutHistory>({});
+  const [dailyActivityHistory, setDailyActivityHistory] = useState<DailyActivityHistory>({});
+  const [showWorkoutTypeModal, setShowWorkoutTypeModal] = useState(false);
   const [showAddWorkoutModal, setShowAddWorkoutModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [editingWorkout, setEditingWorkout] = useState(false);
+  const [editingWorkoutIndex, setEditingWorkoutIndex] = useState<number>(0); // Track which workout in array
+  const [editNotesText, setEditNotesText] = useState('');
+  const [editWorkoutTitle, setEditWorkoutTitle] = useState('');
+  const [editWorkoutExercises, setEditWorkoutExercises] = useState<WorkoutExercise[]>([]);
+  const [addingSetToExerciseId, setAddingSetToExerciseId] = useState<string | null>(null);
+  const [newSetReps, setNewSetReps] = useState('');
+  const [newSetWeight, setNewSetWeight] = useState('');
   const [exerciseName, setExerciseName] = useState('');
-  const [sets, setSets] = useState('');
   const [reps, setReps] = useState('');
   const [weight, setWeight] = useState('');
+  const [restMinutes, setRestMinutes] = useState(1);
+  const [restSeconds, setRestSeconds] = useState(30);
   const [notes, setNotes] = useState('');
   const [currentExercises, setCurrentExercises] = useState<WorkoutExercise[]>([]);
+  const [activeExerciseId, setActiveExerciseId] = useState<string | null>(null);
+  const [editingSetId, setEditingSetId] = useState<string | null>(null);
+  const [workoutStartTime, setWorkoutStartTime] = useState<number | null>(null);
+  const [activeRestTimer, setActiveRestTimer] = useState<number | null>(null);
+  const [restTimerInterval, setRestTimerInterval] = useState<NodeJS.Timeout | null>(null);
   const [todaySteps, setTodaySteps] = useState(0);
   const [stepGoal, setStepGoal] = useState(10000);
   const [exerciseMinutesGoal, setExerciseMinutesGoal] = useState(30);
@@ -65,22 +124,51 @@ export default function WorkoutsScreen({ onOpenSettings }: WorkoutsScreenProps) 
   const [todayExerciseMinutes, setTodayExerciseMinutes] = useState(0);
   const [todayCaloriesBurned, setTodayCaloriesBurned] = useState(0);
   const [isPedometerAvailable, setIsPedometerAvailable] = useState(false);
-  const [stepOffset, setStepOffset] = useState(300);
-  const [offsetLoaded, setOffsetLoaded] = useState(false);
+  const [useHealthAPI, setUseHealthAPI] = useState(false);
+  const [stepMultiplier, setStepMultiplier] = useState(1.33);
+  const [multiplierLoaded, setMultiplierLoaded] = useState(false);
   
   // Calendar state
   const now = new Date();
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayDate());
   const [viewingMonth, setViewingMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
 
   useEffect(() => {
     loadWorkoutHistory();
+    loadDailyActivityHistory();
     loadWorkoutGoals();
-    loadStepOffset();
+    loadStepMultiplier();
+    initializeHealthAPI();
   }, []);
 
+  // Sync workout duration to daily activity after history loads
   useEffect(() => {
-    // Only setup tracking after offset is loaded
-    if (!offsetLoaded) return;
+    if (Object.keys(workoutHistory).length > 0) {
+      syncWorkoutToActivity();
+    }
+  }, [workoutHistory]);
+
+  // Reload workout history when workout finishes
+  useEffect(() => {
+    if (!isWorkoutActive) {
+      loadWorkoutHistory();
+      loadDailyActivityHistory();
+    }
+  }, [isWorkoutActive]);
+
+  // Load today's exercise minutes from daily activity history
+  useEffect(() => {
+    const today = getTodayDate();
+    const todayActivity = dailyActivityHistory[today];
+    if (todayActivity) {
+      setTodayExerciseMinutes(todayActivity.exerciseMinutes || 0);
+      setTodayCaloriesBurned(todayActivity.caloriesBurned || 0);
+    }
+  }, [dailyActivityHistory]);
+
+  useEffect(() => {
+    // Only setup tracking after multiplier is loaded
+    if (!multiplierLoaded) return;
     
     setupStepTracking();
 
@@ -96,38 +184,85 @@ export default function WorkoutsScreen({ onOpenSettings }: WorkoutsScreenProps) 
       }
     });
 
-    // Set up interval to check every 10 seconds
+    // Set up interval to check every 30 seconds
     const intervalId = setInterval(() => {
       updateStepCount();
-    }, 10 * 1000);
+    }, 30 * 1000);
 
     return () => {
       clearTimeout(initialTimeout);
       subscription.remove();
       clearInterval(intervalId);
     };
-  }, [offsetLoaded]);
+  }, [multiplierLoaded, stepMultiplier]);
+
+  // Auto-save today's activity data
+  useEffect(() => {
+    const saveTimer = setTimeout(() => {
+      const today = getTodayDate();
+      saveDailyActivity(today, todaySteps, todayExerciseMinutes, todayCaloriesBurned);
+    }, 2000); // Debounce saves by 2 seconds
+
+    return () => clearTimeout(saveTimer);
+  }, [todaySteps, todayExerciseMinutes, todayCaloriesBurned]);
+
+  const loadStepMultiplier = async () => {
+    try {
+      const multiplier = await storage.getItem<number>(STORAGE_KEYS.STEP_MULTIPLIER);
+      if (multiplier !== null) {
+        setStepMultiplier(multiplier);
+      }
+      setMultiplierLoaded(true);
+    } catch (error) {
+      console.error('Error loading step multiplier:', error);
+      setMultiplierLoaded(true);
+    }
+  };
+
+  const initializeHealthAPI = async () => {
+    try {
+      const initialized = await healthService.initialize();
+      setUseHealthAPI(initialized);
+      console.log('Health API available:', initialized);
+    } catch (error) {
+      console.log('Health API init failed:', error);
+      setUseHealthAPI(false);
+    }
+  };
 
   const updateStepCount = async () => {
     try {
-      const isAvailable = await Pedometer.isAvailableAsync();
-      if (isAvailable) {
-        const permission = await Pedometer.getPermissionsAsync();
-        
-        if (permission.status === 'granted') {
-          const end = new Date();
-          const start = new Date();
-          start.setHours(0, 0, 0, 0);
+      let rawSteps = 0;
 
-          const pastStepsResult = await Pedometer.getStepCountAsync(start, end);
-          if (pastStepsResult) {
-            // Add offset to match Health app aggregated data
-            const adjustedSteps = pastStepsResult.steps + stepOffset;
-            console.log('Pedometer:', pastStepsResult.steps, '+ offset:', stepOffset, '=', adjustedSteps);
-            setTodaySteps(adjustedSteps);
+      // Try Health API first
+      if (useHealthAPI) {
+        rawSteps = await healthService.getTodaySteps();
+        console.log('Steps from Health API:', rawSteps);
+      }
+      
+      // Fallback to Pedometer if Health API fails or returns 0
+      if (rawSteps === 0) {
+        const isAvailable = await Pedometer.isAvailableAsync();
+        if (isAvailable) {
+          const permission = await Pedometer.getPermissionsAsync();
+          
+          if (permission.status === 'granted') {
+            const end = new Date();
+            const start = new Date();
+            start.setHours(0, 0, 0, 0);
+
+            const pastStepsResult = await Pedometer.getStepCountAsync(start, end);
+            if (pastStepsResult) {
+              rawSteps = pastStepsResult.steps;
+              console.log('Steps from Pedometer:', rawSteps);
+            }
           }
         }
       }
+
+      // Apply multiplier to compensate for health API inaccuracy
+      const adjustedSteps = Math.round(rawSteps * stepMultiplier);
+      setTodaySteps(adjustedSteps);
     } catch (error) {
       console.error('Error updating step count:', error);
     }
@@ -160,10 +295,121 @@ export default function WorkoutsScreen({ onOpenSettings }: WorkoutsScreenProps) 
     try {
       const history = await storage.getItem<WorkoutHistory>(STORAGE_KEYS.WORKOUT_HISTORY);
       if (history) {
-        setWorkoutHistory(history);
+        // Migrate old format (single workout per day) to new format (array of workouts)
+        const migratedHistory: WorkoutHistory = {};
+        for (const [date, workouts] of Object.entries(history)) {
+          if (Array.isArray(workouts)) {
+            // Ensure each workout has an ID
+            migratedHistory[date] = workouts.map((workout, index) => ({
+              ...workout,
+              id: workout.id || `${date}-${index}-${Date.now()}`,
+            }));
+          } else {
+            // Old format: single workout object, convert to array and ensure ID
+            const workout = workouts as any;
+            migratedHistory[date] = [{
+              ...workout,
+              id: workout.id || `${date}-0-${Date.now()}`,
+            }];
+          }
+        }
+        setWorkoutHistory(migratedHistory);
+        // Save migrated format back to storage
+        if (JSON.stringify(history) !== JSON.stringify(migratedHistory)) {
+          await storage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, migratedHistory);
+        }
       }
     } catch (error) {
       console.error('Error loading workout history:', error);
+    }
+  };
+
+  const loadDailyActivityHistory = async () => {
+    try {
+      const history = await storage.getItem<DailyActivityHistory>(STORAGE_KEYS.DAILY_ACTIVITY);
+      if (history) {
+        setDailyActivityHistory(history);
+        // Immediately update today's exercise minutes
+        const today = getTodayDate();
+        const todayActivity = history[today];
+        if (todayActivity) {
+          setTodayExerciseMinutes(todayActivity.exerciseMinutes || 0);
+          setTodayCaloriesBurned(todayActivity.caloriesBurned || 0);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading daily activity history:', error);
+    }
+  };
+
+  const syncWorkoutToActivity = async () => {
+    try {
+      const today = getTodayDate();
+      const todayWorkouts = workoutHistory[today];
+      
+      // Get current activity
+      const activityHistory = await storage.getItem<DailyActivityHistory>(STORAGE_KEYS.DAILY_ACTIVITY) || {};
+      const todayActivity = activityHistory[today] || {
+        date: today,
+        steps: 0,
+        exerciseMinutes: 0,
+        caloriesBurned: 0,
+      };
+      
+      if (todayWorkouts && todayWorkouts.length > 0) {
+        // Sum up all workouts for the day
+        let totalMinutes = 0;
+        let totalCalories = 0;
+        
+        todayWorkouts.forEach(workout => {
+          if (workout.duration) {
+            totalMinutes += workout.duration;
+            const caloriesPerMinute = workout.intensity !== undefined 
+              ? (3 + workout.intensity * 0.7) 
+              : 5;
+            totalCalories += Math.floor(workout.duration * caloriesPerMinute);
+          }
+        });
+        
+        // Update exercise minutes from workout duration
+        todayActivity.exerciseMinutes = totalMinutes;
+        todayActivity.caloriesBurned = totalCalories;
+      } else {
+        // No workouts for today, reset exercise minutes and calories to 0
+        todayActivity.exerciseMinutes = 0;
+        todayActivity.caloriesBurned = 0;
+      }
+      
+      activityHistory[today] = todayActivity;
+      await storage.setItem(STORAGE_KEYS.DAILY_ACTIVITY, activityHistory);
+      
+      // Update state
+      setDailyActivityHistory({ ...activityHistory });
+      setTodayExerciseMinutes(todayActivity.exerciseMinutes);
+      setTodayCaloriesBurned(todayActivity.caloriesBurned);
+    } catch (error) {
+      console.error('Error syncing workout to activity:', error);
+    }
+  };
+
+  const saveDailyActivity = async (date: string, steps: number, exerciseMinutes: number, caloriesBurned: number) => {
+    try {
+      const activityData: DailyActivityData = {
+        date,
+        steps,
+        exerciseMinutes,
+        caloriesBurned,
+      };
+
+      const updatedHistory = {
+        ...dailyActivityHistory,
+        [date]: activityData,
+      };
+
+      await storage.setItem(STORAGE_KEYS.DAILY_ACTIVITY, updatedHistory);
+      setDailyActivityHistory(updatedHistory);
+    } catch (error) {
+      console.error('Error saving daily activity:', error);
     }
   };
 
@@ -180,41 +426,354 @@ export default function WorkoutsScreen({ onOpenSettings }: WorkoutsScreenProps) 
     }
   };
 
-  const loadStepOffset = async () => {
-    try {
-      const offset = await storage.getItem<number>(STORAGE_KEYS.STEP_OFFSET);
-      if (offset !== null) {
-        setStepOffset(offset);
-      }
-      setOffsetLoaded(true);
-    } catch (error) {
-      console.error('Error loading step offset:', error);
-      setOffsetLoaded(true);
-    }
-  };
-
   const addExercise = () => {
-    if (!exerciseName.trim() || !sets || !reps) {
-      Alert.alert('Missing Info', 'Please fill in exercise name, sets, and reps');
+    if (!exerciseName.trim()) {
+      Alert.alert('Missing Info', 'Please enter an exercise name');
       return;
     }
 
+    // Find this exercise from previous workout for reference
+    const previousWorkout = getLastWorkoutWithExercise(exerciseName.trim());
+    
+    const totalRestSeconds = restMinutes * 60 + restSeconds;
+    
     const newExercise: WorkoutExercise = {
       id: Date.now().toString(),
       name: exerciseName.trim(),
-      sets: parseInt(sets) || 0,
-      reps: parseInt(reps) || 0,
-      weight: weight ? parseFloat(weight) : undefined,
+      sets: [],
+      restTimer: totalRestSeconds,
+      previousWeight: previousWorkout?.weight,
+      previousReps: previousWorkout?.reps,
     };
 
     setCurrentExercises([...currentExercises, newExercise]);
+    setActiveExerciseId(newExercise.id);
     setExerciseName('');
-    setSets('');
     setReps('');
     setWeight('');
   };
 
+  const logSet = () => {
+    if (!activeExerciseId) {
+      Alert.alert('No Active Exercise', 'Please add an exercise first');
+      return;
+    }
+
+    if (!reps) {
+      Alert.alert('Missing Info', 'Please enter reps for this set');
+      return;
+    }
+
+    const newSet: WorkoutSet = {
+      id: `${Date.now()}`,
+      reps: parseInt(reps) || 0,
+      weight: weight ? parseFloat(weight) : undefined,
+      completed: true,
+      completedAt: Date.now(),
+    };
+
+    const totalRestSeconds = restMinutes * 60 + restSeconds;
+
+    setCurrentExercises(prevExercises =>
+      prevExercises.map(ex => {
+        if (ex.id === activeExerciseId) {
+          return {
+            ...ex,
+            sets: [...ex.sets, newSet],
+            restTimer: totalRestSeconds,
+          };
+        }
+        return ex;
+      })
+    );
+
+    // Start rest timer
+    startRestTimer(totalRestSeconds);
+    
+    // Clear inputs for next set
+    setReps('');
+    setWeight('');
+  };
+
+  const editSet = (exerciseId: string, setId: string) => {
+    const exercise = currentExercises.find(ex => ex.id === exerciseId);
+    const set = exercise?.sets.find(s => s.id === setId);
+    
+    if (set) {
+      setReps(set.reps.toString());
+      setWeight(set.weight?.toString() || '');
+      setEditingSetId(setId);
+    }
+  };
+
+  const updateSet = (exerciseId: string, setId: string, newReps: number, newWeight?: number) => {
+    setCurrentExercises(prevExercises =>
+      prevExercises.map(ex => {
+        if (ex.id === exerciseId) {
+          return {
+            ...ex,
+            sets: ex.sets.map(set =>
+              set.id === setId
+                ? { ...set, reps: newReps, weight: newWeight }
+                : set
+            ),
+          };
+        }
+        return ex;
+      })
+    );
+    setEditingSetId(null);
+    setReps('');
+    setWeight('');
+  };
+
+  const deleteSet = (exerciseId: string, setId: string) => {
+    Alert.alert(
+      'Delete Set',
+      'Remove this set?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setCurrentExercises(prevExercises =>
+              prevExercises.map(ex => {
+                if (ex.id === exerciseId) {
+                  return {
+                    ...ex,
+                    sets: ex.sets.filter(set => set.id !== setId),
+                  };
+                }
+                return ex;
+              })
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const finishExercise = () => {
+    if (!activeExerciseId) return;
+    
+    cancelRestTimer();
+    setActiveExerciseId(null);
+    setReps('');
+    setWeight('');
+  };
+
+ const getLastWorkoutWithExercise = (exerciseName: string) => {
+    const dates = Object.keys(workoutHistory).sort((a, b) => b.localeCompare(a));
+    
+    for (const date of dates) {
+      const workouts = workoutHistory[date];
+      if (!workouts || !Array.isArray(workouts)) continue;
+      // Iterate through all workouts for this date
+      for (const workout of workouts) {
+        const exercise = workout.exercises.find(ex => 
+          ex.name.toLowerCase() === exerciseName.toLowerCase()
+        );
+        
+        if (exercise && exercise.sets.length > 0) {
+          // Return the first set's data as reference
+          return {
+            weight: exercise.sets[0].weight,
+            reps: exercise.sets[0].reps,
+          };
+        }
+      }
+    }
+    
+    return null;
+  };
+
+  const startWorkout = () => {
+    setShowWorkoutTypeModal(true);
+  };
+
+  const handleWorkoutTypeSelected = (type: WorkoutType) => {
+    contextStartWorkout(type);
+    onStartWorkout();
+  };
+
+  const handleEditNotes = (workoutIndex: number = 0) => {
+    const todayWorkouts = getTodayWorkout();
+    if (todayWorkouts && todayWorkouts[workoutIndex]) {
+      setEditingWorkoutIndex(workoutIndex);
+      setEditNotesText(todayWorkouts[workoutIndex].notes || '');
+      setEditingNotes(true);
+    }
+  };
+
+  const handleEditWorkout = (workoutIndex: number = 0) => {
+    const todayWorkouts = getTodayWorkout();
+    if (todayWorkouts && todayWorkouts[workoutIndex]) {
+      setEditingWorkoutIndex(workoutIndex);
+      setEditWorkoutTitle(todayWorkouts[workoutIndex].title || '');
+      setEditWorkoutExercises(todayWorkouts[workoutIndex].exercises);
+      setEditNotesText(todayWorkouts[workoutIndex].notes || '');
+      setEditingWorkout(true);
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    const todayWorkouts = getTodayWorkout();
+    if (!todayWorkouts || !todayWorkouts[editingWorkoutIndex]) return;
+
+    try {
+      const today = getTodayDate();
+      const updatedWorkouts = [...todayWorkouts];
+      updatedWorkouts[editingWorkoutIndex] = {
+        ...updatedWorkouts[editingWorkoutIndex],
+        notes: editNotesText.trim() || undefined,
+      };
+
+      const history = workoutHistory;
+      history[today] = updatedWorkouts;
+      await storage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, history);
+      setWorkoutHistory({ ...history });
+      setEditingNotes(false);
+    } catch (error) {
+      console.error('Error saving notes:', error);
+    }
+  };
+
+  const handleSaveWorkout = async () => {
+    const todayWorkouts = getTodayWorkout();
+    if (!todayWorkouts || !todayWorkouts[editingWorkoutIndex]) return;
+
+    try {
+      const today = getTodayDate();
+      const updatedWorkouts = [...todayWorkouts];
+      updatedWorkouts[editingWorkoutIndex] = {
+        ...updatedWorkouts[editingWorkoutIndex],
+        title: editWorkoutTitle.trim() || undefined,
+        exercises: editWorkoutExercises,
+        notes: editNotesText.trim() || undefined,
+      };
+
+      const history = workoutHistory;
+      history[today] = updatedWorkouts;
+      await storage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, history);
+      setWorkoutHistory({ ...history });
+      
+      // Update daily activity with workout duration
+      const workout = updatedWorkouts[editingWorkoutIndex];
+      if (workout.duration) {
+        // Recalculate total for all workouts
+        await syncWorkoutToActivity();
+      }
+      
+      setEditingWorkout(false);
+      setAddingSetToExerciseId(null);
+      setNewSetReps('');
+      setNewSetWeight('');
+    } catch (error) {
+      console.error('Error saving workout:', error);
+    }
+  };
+
+  const handleDeleteExerciseFromEdit = (exerciseId: string) => {
+    Alert.alert(
+      'Delete Exercise',
+      'Are you sure you want to delete this exercise?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setEditWorkoutExercises(prev => prev.filter(ex => ex.id !== exerciseId));
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteSetFromEdit = (exerciseId: string, setId: string) => {
+    setEditWorkoutExercises(prev => prev.map(ex => {
+      if (ex.id === exerciseId) {
+        return {
+          ...ex,
+          sets: ex.sets.filter(s => s.id !== setId),
+        };
+      }
+      return ex;
+    }));
+  };
+
+  const handleAddSetToExercise = (exerciseId: string) => {
+    if (!newSetReps) return;
+
+    const newSet: WorkoutSet = {
+      id: Date.now().toString(),
+      reps: parseInt(newSetReps),
+      weight: newSetWeight ? parseFloat(newSetWeight) : undefined,
+      completed: true,
+      completedAt: Date.now(),
+    };
+
+    setEditWorkoutExercises(prev => prev.map(ex => {
+      if (ex.id === exerciseId) {
+        return {
+          ...ex,
+          sets: [...ex.sets, newSet],
+        };
+      }
+      return ex;
+    }));
+
+    setAddingSetToExerciseId(null);
+    setNewSetReps('');
+    setNewSetWeight('');
+  };
+
+  const handleEditExerciseName = (exerciseId: string, newName: string) => {
+    setEditWorkoutExercises(prev => prev.map(ex => {
+      if (ex.id === exerciseId) {
+        return { ...ex, name: newName };
+      }
+      return ex;
+    }));
+  };
+
+  const startRestTimer = (seconds: number) => {
+    // Clear existing timer
+    if (restTimerInterval) {
+      clearInterval(restTimerInterval);
+    }
+    
+    setActiveRestTimer(seconds);
+    
+    const interval = setInterval(() => {
+      setActiveRestTimer(prev => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    setRestTimerInterval(interval);
+  };
+
+  const cancelRestTimer = () => {
+    if (restTimerInterval) {
+      clearInterval(restTimerInterval);
+      setRestTimerInterval(null);
+    }
+    setActiveRestTimer(null);
+  };
+
   const removeExercise = (id: string) => {
+    if (id === activeExerciseId) {
+      setActiveExerciseId(null);
+      setReps('');
+      setWeight('');
+      cancelRestTimer();
+    }
     setCurrentExercises(currentExercises.filter(ex => ex.id !== id));
   };
 
@@ -224,28 +783,97 @@ export default function WorkoutsScreen({ onOpenSettings }: WorkoutsScreenProps) 
       return;
     }
 
+    // Show notes dialog before saving
+    Alert.prompt(
+      'Workout Complete!',
+      'Add notes about your workout (optional)',
+      [
+        {
+          text: 'Skip',
+          onPress: () => finalizeSaveWorkout(''),
+          style: 'cancel',
+        },
+        {
+          text: 'Save',
+          onPress: (text?: string) => finalizeSaveWorkout(text || ''),
+        },
+      ],
+      'plain-text',
+      notes
+    );
+  };
+
+  const finalizeSaveWorkout = async (workoutNotes: string) => {
+    const endTime = Date.now();
+    const duration = workoutStartTime ? Math.floor((endTime - workoutStartTime) / 1000 / 60) : 0; // minutes
+
     const todayDate = getTodayDate();
     const newWorkout: WorkoutSession = {
       id: Date.now().toString(),
       date: todayDate,
       exercises: currentExercises,
-      notes: notes.trim() || undefined,
+      notes: workoutNotes.trim() || undefined,
+      duration,
+      startTime: workoutStartTime || undefined,
+      endTime,
     };
 
-    const updatedHistory = {
-      ...workoutHistory,
-      [todayDate]: newWorkout,
-    };
+    const updatedHistory = { ...workoutHistory };
+    if (!updatedHistory[todayDate] || !Array.isArray(updatedHistory[todayDate])) {
+      updatedHistory[todayDate] = [];
+    }
+    updatedHistory[todayDate].push(newWorkout);
 
     await storage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, updatedHistory);
     setWorkoutHistory(updatedHistory);
+    
+    // Update exercise minutes for activity tracking
+    setTodayExerciseMinutes(prev => prev + duration);
+    
+    // Simple calorie calculation: ~5 calories per minute of strength training
+    const caloriesBurned = Math.floor(duration * 5);
+    setTodayCaloriesBurned(prev => prev + caloriesBurned);
+    
+    // Reset state
     setCurrentExercises([]);
+    setActiveExerciseId(null);
+    setExerciseName('');
+    setReps('');
+    setWeight('');
     setNotes('');
+    setWorkoutStartTime(null);
+    cancelRestTimer();
     setShowAddWorkoutModal(false);
-    Alert.alert('Success', 'Workout saved!');
+    
+    Alert.alert('Success', `Workout saved! ${duration} minutes, ~${caloriesBurned} calories burned`);
   };
 
-  const deleteWorkout = async (date: string) => {
+  const cancelWorkout = () => {
+    Alert.alert(
+      'Cancel Workout',
+      'Are you sure? All progress will be lost.',
+      [
+        { text: 'Keep Working Out', style: 'cancel' },
+        {
+          text: 'Cancel Workout',
+          style: 'destructive',
+          onPress: () => {
+            setCurrentExercises([]);
+            setActiveExerciseId(null);
+            setExerciseName('');
+            setReps('');
+            setWeight('');
+            setNotes('');
+            setWorkoutStartTime(null);
+            cancelRestTimer();
+            setShowAddWorkoutModal(false);
+          },
+        },
+      ]
+    );
+  };
+
+  const deleteWorkout = async (date: string, workoutId: string) => {
     Alert.alert(
       'Delete Workout',
       'Are you sure you want to delete this workout?',
@@ -256,9 +884,26 @@ export default function WorkoutsScreen({ onOpenSettings }: WorkoutsScreenProps) 
           style: 'destructive',
           onPress: async () => {
             const updatedHistory = { ...workoutHistory };
-            delete updatedHistory[date];
-            await storage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, updatedHistory);
-            setWorkoutHistory(updatedHistory);
+            const dayWorkouts = updatedHistory[date];
+            
+            if (dayWorkouts && dayWorkouts.length > 0) {
+              // Filter out the workout with matching ID
+              const filteredWorkouts = dayWorkouts.filter(w => w.id !== workoutId);
+              
+              if (filteredWorkouts.length === 0) {
+                // If no workouts left, remove the date entry
+                delete updatedHistory[date];
+              } else {
+                // Otherwise, update with remaining workouts
+                updatedHistory[date] = filteredWorkouts;
+              }
+              
+              await storage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, updatedHistory);
+              setWorkoutHistory(updatedHistory);
+              
+              // Resync activity data for this date
+              await syncWorkoutToActivity();
+            }
           },
         },
       ]
@@ -267,7 +912,11 @@ export default function WorkoutsScreen({ onOpenSettings }: WorkoutsScreenProps) 
 
   const getTodayWorkout = () => {
     const today = getTodayDate();
-    return workoutHistory[today];
+    return workoutHistory[today] || []; // Return array of workouts
+  };
+
+  const getSelectedDateWorkout = () => {
+    return workoutHistory[selectedDate] || []; // Return array of workouts
   };
 
   const getHistoryDates = () => {
@@ -283,40 +932,23 @@ export default function WorkoutsScreen({ onOpenSettings }: WorkoutsScreenProps) 
     });
   };
 
-  const getMonthName = (monthString: string) => {
-    const [year, month] = monthString.split('-');
-    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  };
-
   const changeMonth = (delta: number) => {
     const [year, month] = viewingMonth.split('-').map(Number);
     const newDate = new Date(year, month - 1 + delta, 1);
     setViewingMonth(`${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}`);
   };
 
-  const canGoNextMonth = () => {
-    const [year, month] = viewingMonth.split('-').map(Number);
-    const viewDate = new Date(year, month - 1, 1);
-    const now = new Date();
-    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    return viewDate < currentMonth;
-  };
-
-  const getCalendarMonths = () => {
-    const [year, month] = viewingMonth.split('-').map(Number);
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const dates = [];
-    
-    for (let day = 1; day <= daysInMonth; day++) {
-      dates.push(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
-    }
-    
-    return dates;
-  };
-
-  const todayWorkout = getTodayWorkout();
+  const selectedDateWorkout = getSelectedDateWorkout();
   const historyDates = getHistoryDates();
+  const isToday = selectedDate === getTodayDate();
+
+  // Get activity data for the selected date
+  const selectedDateActivity = dailyActivityHistory[selectedDate];
+  const displaySteps = isToday ? todaySteps : (selectedDateActivity?.steps || 0);
+  const displayExerciseMinutes = isToday 
+    ? todayExerciseMinutes
+    : (selectedDateActivity?.exerciseMinutes || 0);
+  const displayCaloriesBurned = isToday ? todayCaloriesBurned : (selectedDateActivity?.caloriesBurned || 0);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.surface }]}>
@@ -338,352 +970,210 @@ export default function WorkoutsScreen({ onOpenSettings }: WorkoutsScreenProps) 
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Activity Rings Card */}
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <View style={styles.activityHeader}>
-            <Text style={[styles.cardTitle, { color: theme.text }]}>Today's Activity</Text>
-          </View>
-          <View style={styles.ringsContainer}>
-            <ActivityRings
-              steps={todaySteps}
-              stepsGoal={stepGoal}
-              exerciseMinutes={todayExerciseMinutes}
-              exerciseGoal={exerciseMinutesGoal}
-              caloriesBurned={todayCaloriesBurned}
-              caloriesGoal={caloriesBurnedGoal}
-              size={180}
-            />
-          </View>
-          <View style={styles.ringLegend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#5383B8' }]} />
-              <Text style={[styles.legendText, { color: theme.textSecondary }]}>
-                {todaySteps.toLocaleString()} / {stepGoal.toLocaleString()} steps
-              </Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#34C759' }]} />
-              <Text style={[styles.legendText, { color: theme.textSecondary }]}>
-                {todayExerciseMinutes} / {exerciseMinutesGoal} min
-              </Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#FF3B30' }]} />
-              <Text style={[styles.legendText, { color: theme.textSecondary }]}>
-                {todayCaloriesBurned.toLocaleString()} / {caloriesBurnedGoal.toLocaleString()} cal
-              </Text>
-            </View>
-          </View>
-        </View>
+        <ActivityRingsCard
+          theme={theme}
+          todaySteps={displaySteps}
+          stepGoal={stepGoal}
+          todayExerciseMinutes={displayExerciseMinutes}
+          exerciseMinutesGoal={exerciseMinutesGoal}
+          todayCaloriesBurned={displayCaloriesBurned}
+          caloriesBurnedGoal={caloriesBurnedGoal}
+        />
 
         {/* Step Counter Card */}
         {isPedometerAvailable && (
-          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <View style={styles.stepsHeader}>
-              <View style={styles.stepsTitleContainer}>
-                <Ionicons name="walk" size={24} color={theme.primary} />
-                <Text style={[styles.cardTitle, { color: theme.text, marginBottom: 0, marginLeft: 8 }]}>Today's Steps</Text>
-              </View>
-            </View>
-            <View style={styles.stepsContent}>
-              <Text style={[styles.stepsCount, { color: theme.primary }]}>
-                {todaySteps.toLocaleString()}
-              </Text>
-              <Text style={[styles.stepsLabel, { color: theme.textSecondary }]}>steps</Text>
-            </View>
-            <View style={styles.stepsProgressBar}>
-              <View style={[styles.stepsProgressBackground, { backgroundColor: theme.border }]}>
-                <View 
-                  style={[
-                    styles.stepsProgressFill,
-                    { 
-                      backgroundColor: theme.primary,
-                      width: `${Math.min((todaySteps / stepGoal) * 100, 100)}%`
-                    }
-                  ]}
-                />
-              </View>
-              <View style={styles.stepsGoalRow}>
-                <Text style={[styles.stepsGoalText, { color: theme.textSecondary }]}>0</Text>
-                <Text style={[styles.stepsGoalText, { color: theme.textSecondary }]}>{stepGoal.toLocaleString()}</Text>
-              </View>
-            </View>
-          </View>
+          <StepCounterCard
+            theme={theme}
+            todaySteps={displaySteps}
+            stepGoal={stepGoal}
+          />
         )}
 
-        {todayWorkout ? (
-          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.cardTitle, { color: theme.text }]}>Today's Workout</Text>
-            {todayWorkout.exercises.map((exercise) => (
-              <View key={exercise.id} style={styles.exerciseItem}>
-                <View style={styles.exerciseInfo}>
-                  <Text style={[styles.exerciseName, { color: theme.text }]}>{exercise.name}</Text>
-                  <Text style={[styles.exerciseDetails, { color: theme.textSecondary }]}>
-                    {exercise.sets} sets × {exercise.reps} reps
-                    {exercise.weight ? ` @ ${exercise.weight} lbs` : ''}
-                  </Text>
-                </View>
-              </View>
-            ))}
-            {todayWorkout.notes && (
-              <View style={styles.notesContainer}>
-                <Text style={[styles.notesLabel, { color: theme.textSecondary }]}>Notes:</Text>
-                <Text style={[styles.notesText, { color: theme.text }]}>{todayWorkout.notes}</Text>
-              </View>
-            )}
-          </View>
+        {/* Back to Today button */}
+        {!isToday && (
+          <TouchableOpacity
+            style={[styles.backToTodayButton, { backgroundColor: theme.primary }]}
+            onPress={() => setSelectedDate(getTodayDate())}
+          >
+            <Ionicons name="today-outline" size={20} color="white" />
+            <Text style={styles.backToTodayText}>Back to Today</Text>
+          </TouchableOpacity>
+        )}
+
+        {selectedDateWorkout && selectedDateWorkout.length > 0 ? (
+          <>
+            {selectedDateWorkout.map((workout, workoutIndex) => {
+              // Ensure workout has valid data
+              if (!workout) return null;
+              const workoutId = workout.id || `${selectedDate}-${workoutIndex}`;
+              const showTitle = selectedDateWorkout.length > 1 
+                ? `Workout ${workoutIndex + 1}` 
+                : (isToday ? "Today's Workout" : 'Workout');
+              
+              return (
+                <WorkoutCard
+                  key={workoutId}
+                  workout={workout}
+                  workoutIndex={workoutIndex}
+                  totalWorkouts={selectedDateWorkout.length}
+                  theme={theme}
+                  isToday={isToday}
+                  showTitle={showTitle}
+                  onEdit={isToday ? () => handleEditWorkout(workoutIndex) : undefined}
+                  onDelete={() => deleteWorkout(selectedDate, workoutId)}
+                  onAddNotes={isToday ? () => handleEditWorkout(workoutIndex) : undefined}
+                />
+              );
+            })}
+          </>
         ) : (
           <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-              No workout logged for today
+              {isToday ? 'No workout logged for today' : `No workout logged for ${formatDate(selectedDate)}`}
             </Text>
           </View>
         )}
 
-        <TouchableOpacity
-          style={[styles.addButton, { backgroundColor: theme.primary }]}
-          onPress={() => setShowAddWorkoutModal(true)}
-        >
-          <Ionicons name="add-circle-outline" size={24} color="white" />
-          <Text style={styles.addButtonText}>Log Workout</Text>
-        </TouchableOpacity>
+        {isToday && (
+          <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: theme.primary }]}
+            onPress={startWorkout}
+          >
+            <Ionicons name="barbell-outline" size={24} color="white" />
+            <Text style={styles.addButtonText}>Start Workout</Text>
+          </TouchableOpacity>
+        )}
 
         {historyDates.length > 0 && (
           <View style={styles.recentSection}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Workouts</Text>
             {historyDates.slice(0, 3).map((date) => {
-              const workout = workoutHistory[date];
+              const workouts = workoutHistory[date];
+              if (!workouts || !Array.isArray(workouts)) return null;
+              const totalExercises = workouts.reduce((sum, w) => sum + (w.exercises?.length || 0), 0);
               return (
-                <View key={date} style={[styles.historyCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                  <Text style={[styles.historyDate, { color: theme.textSecondary }]}>
-                    {formatDate(date)}
-                  </Text>
-                  <Text style={[styles.historyExerciseCount, { color: theme.text }]}>
-                    {workout.exercises.length} exercise{workout.exercises.length !== 1 ? 's' : ''}
-                  </Text>
-                </View>
+                <WorkoutHistoryCard
+                  key={date}
+                  date={date}
+                  formattedDate={formatDate(date)}
+                  workoutCount={workouts.length}
+                  workoutTitle={workouts.length === 1 ? workouts[0].title : undefined}
+                  totalExercises={totalExercises}
+                  theme={theme}
+                  onPress={() => {
+                    setSelectedDate(date);
+                    setShowHistoryModal(false);
+                  }}
+                />
               );
             })}
           </View>
         )}
       </ScrollView>
 
-      {/* Add Workout Modal */}
-      <Modal
+      {/* Workout Type Selection Modal */}
+      <WorkoutTypeSelectionModal
+        visible={showWorkoutTypeModal}
+        onClose={() => setShowWorkoutTypeModal(false)}
+        onSelectType={handleWorkoutTypeSelected}
+      />
+
+      {/* Edit Notes Modal */}
+      <EditNotesModal
+        visible={editingNotes}
+        notes={editNotesText}
+        onNotesChange={setEditNotesText}
+        onClose={() => setEditingNotes(false)}
+        onSave={handleSaveNotes}
+        theme={theme}
+      />
+
+      {/* Edit Workout Modal */}
+      <EditWorkoutModal
+        visible={editingWorkout}
+        exercises={editWorkoutExercises}
+        workoutTitle={editWorkoutTitle}
+        notes={editNotesText}
+        addingSetToExerciseId={addingSetToExerciseId}
+        newSetReps={newSetReps}
+        newSetWeight={newSetWeight}
+        onClose={() => setEditingWorkout(false)}
+        onSave={handleSaveWorkout}
+        onWorkoutTitleChange={setEditWorkoutTitle}
+        onNotesChange={setEditNotesText}
+        onExerciseNameChange={handleEditExerciseName}
+        onDeleteExercise={handleDeleteExerciseFromEdit}
+        onDeleteSet={handleDeleteSetFromEdit}
+        onAddSetClick={setAddingSetToExerciseId}
+        onAddSetCancel={() => {
+          setAddingSetToExerciseId(null);
+          setNewSetReps('');
+          setNewSetWeight('');
+        }}
+        onAddSet={handleAddSetToExercise}
+        onNewSetRepsChange={setNewSetReps}
+        onNewSetWeightChange={setNewSetWeight}
+        theme={theme}
+      />
+
+      {/* Active Workout Modal */}
+      <ActiveWorkoutModal
         visible={showAddWorkoutModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowAddWorkoutModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Log Workout</Text>
-              <TouchableOpacity onPress={() => setShowAddWorkoutModal(false)}>
-                <Ionicons name="close" size={28} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalScroll}>
-              <Text style={[styles.inputLabel, { color: theme.text }]}>Exercise Name</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                placeholder="e.g., Bench Press"
-                placeholderTextColor={theme.textSecondary}
-                value={exerciseName}
-                onChangeText={setExerciseName}
-              />
-
-              <View style={styles.inputRow}>
-                <View style={styles.inputColumn}>
-                  <Text style={[styles.inputLabel, { color: theme.text }]}>Sets</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                    placeholder="3"
-                    placeholderTextColor={theme.textSecondary}
-                    keyboardType="number-pad"
-                    value={sets}
-                    onChangeText={setSets}
-                  />
-                </View>
-
-                <View style={styles.inputColumn}>
-                  <Text style={[styles.inputLabel, { color: theme.text }]}>Reps</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                    placeholder="10"
-                    placeholderTextColor={theme.textSecondary}
-                    keyboardType="number-pad"
-                    value={reps}
-                    onChangeText={setReps}
-                  />
-                </View>
-
-                <View style={styles.inputColumn}>
-                  <Text style={[styles.inputLabel, { color: theme.text }]}>Weight (lbs)</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                    placeholder="135"
-                    placeholderTextColor={theme.textSecondary}
-                    keyboardType="numeric"
-                    value={weight}
-                    onChangeText={setWeight}
-                  />
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.addExerciseButton, { backgroundColor: theme.surface, borderColor: theme.primary }]}
-                onPress={addExercise}
-              >
-                <Ionicons name="add" size={20} color={theme.primary} />
-                <Text style={[styles.addExerciseButtonText, { color: theme.primary }]}>Add Exercise</Text>
-              </TouchableOpacity>
-
-              {currentExercises.length > 0 && (
-                <View style={styles.exercisesList}>
-                  <Text style={[styles.exercisesListTitle, { color: theme.text }]}>
-                    Exercises ({currentExercises.length})
-                  </Text>
-                  {currentExercises.map((exercise) => (
-                    <View key={exercise.id} style={[styles.exerciseListItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                      <View style={styles.exerciseListInfo}>
-                        <Text style={[styles.exerciseName, { color: theme.text }]}>{exercise.name}</Text>
-                        <Text style={[styles.exerciseDetails, { color: theme.textSecondary }]}>
-                          {exercise.sets} × {exercise.reps}
-                          {exercise.weight ? ` @ ${exercise.weight} lbs` : ''}
-                        </Text>
-                      </View>
-                      <TouchableOpacity onPress={() => removeExercise(exercise.id)}>
-                        <Ionicons name="trash-outline" size={20} color={theme.error} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              <Text style={[styles.inputLabel, { color: theme.text, marginTop: 16 }]}>Notes (Optional)</Text>
-              <TextInput
-                style={[styles.input, styles.notesInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                placeholder="How did the workout feel?"
-                placeholderTextColor={theme.textSecondary}
-                multiline
-                numberOfLines={3}
-                value={notes}
-                onChangeText={setNotes}
-              />
-
-              <TouchableOpacity
-                style={[styles.saveButton, { backgroundColor: theme.primary }]}
-                onPress={saveWorkout}
-              >
-                <Ionicons name="checkmark-circle" size={20} color="white" />
-                <Text style={styles.saveButtonText}>Save Workout</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+        currentExercises={currentExercises}
+        activeExerciseId={activeExerciseId}
+        workoutStartTime={workoutStartTime}
+        exerciseName={exerciseName}
+        reps={reps}
+        weight={weight}
+        restMinutes={restMinutes}
+        restSeconds={restSeconds}
+        editingSetId={editingSetId}
+        activeRestTimer={activeRestTimer}
+        onClose={cancelWorkout}
+        onFinishExercise={finishExercise}
+        onRemoveExercise={removeExercise}
+        onEditSet={editSet}
+        onDeleteSet={deleteSet}
+        onUpdateSet={updateSet}
+        onLogSet={logSet}
+        onAddExercise={addExercise}
+        onSaveWorkout={saveWorkout}
+        onCancelRestTimer={cancelRestTimer}
+        onExerciseNameChange={setExerciseName}
+        onRepsChange={setReps}
+        onWeightChange={setWeight}
+        onRestMinutesChange={setRestMinutes}
+        onRestSecondsChange={setRestSeconds}
+        onCancelEdit={() => {
+          setEditingSetId(null);
+          setReps('');
+          setWeight('');
+        }}
+        theme={theme}
+      />
 
       {/* History Modal */}
-      <Modal
+      <CalendarModal
         visible={showHistoryModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowHistoryModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.historyModalContent, { backgroundColor: theme.card }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Activity History</Text>
-              <TouchableOpacity onPress={() => setShowHistoryModal(false)}>
-                <Ionicons name="close" size={28} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.monthNavigation}>
-              <TouchableOpacity 
-                style={[styles.monthNavButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                onPress={() => changeMonth(-1)}
-              >
-                <Ionicons name="chevron-back" size={24} color={theme.text} />
-              </TouchableOpacity>
-              
-              <Text style={[styles.monthTitle, { color: theme.text }]}>
-                {getMonthName(viewingMonth)}
-              </Text>
-
-              <TouchableOpacity 
-                style={[styles.monthNavButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                onPress={() => changeMonth(1)}
-                disabled={!canGoNextMonth()}
-              >
-                <Ionicons 
-                  name="chevron-forward" 
-                  size={24} 
-                  color={canGoNextMonth() ? theme.text : theme.textSecondary} 
-                />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView 
-              style={styles.calendarScrollView}
-              contentContainerStyle={styles.calendarScrollContent}
-              showsVerticalScrollIndicator={true}
-            >
-              <View style={styles.calendarGrid}>
-                {getCalendarMonths().map((dateString) => {
-                  const date = new Date(dateString + 'T00:00:00');
-                  const hasWorkout = !!workoutHistory[dateString];
-                  const isToday = dateString === getTodayDate();
-                  const isFuture = new Date(dateString) > new Date(getTodayDate());
-                  
-                  // For now, use todaySteps for current day, 0 for others
-                  // In future, load saved daily activity data
-                  const daySteps = isToday ? todaySteps : 0;
-                  const dayExerciseMinutes = isToday ? todayExerciseMinutes : 0;
-                  const dayCalories = isToday ? todayCaloriesBurned : 0;
-                  
-                  const stepsProgress = (daySteps / stepGoal) * 100;
-                  const exerciseProgress = (dayExerciseMinutes / exerciseMinutesGoal) * 100;
-                  const caloriesProgress = (dayCalories / caloriesBurnedGoal) * 100;
-
-                  return (
-                    <View
-                      key={dateString}
-                      style={[
-                        styles.calendarDay,
-                        { backgroundColor: theme.surface },
-                        isToday && { borderColor: theme.primary, borderWidth: 2 },
-                        isFuture && { opacity: 0.3 },
-                      ]}
-                    >
-                      <Text style={[styles.calendarDayNumber, { color: theme.text }]}>
-                        {date.getDate()}
-                      </Text>
-                      <Text style={[styles.calendarDayName, { color: theme.textSecondary }]}>
-                        {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                      </Text>
-                      
-                      <View style={styles.miniRingsContainer}>
-                        {(hasWorkout || daySteps > 0 || dayExerciseMinutes > 0 || dayCalories > 0) && !isFuture ? (
-                          <MiniActivityRings 
-                            stepsProgress={stepsProgress}
-                            exerciseProgress={exerciseProgress}
-                            caloriesProgress={caloriesProgress}
-                            size={32}
-                          />
-                        ) : (
-                          <View style={[styles.emptyMiniRings, { borderColor: theme.border }]} />
-                        )}
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+        viewingMonth={viewingMonth}
+        selectedDate={selectedDate}
+        workoutHistory={workoutHistory}
+        dailyActivityHistory={dailyActivityHistory}
+        todaySteps={todaySteps}
+        todayExerciseMinutes={todayExerciseMinutes}
+        todayCaloriesBurned={todayCaloriesBurned}
+        stepGoal={stepGoal}
+        exerciseMinutesGoal={exerciseMinutesGoal}
+        caloriesBurnedGoal={caloriesBurnedGoal}
+        isWorkoutActive={isWorkoutActive}
+        workoutDuration={workoutDuration}
+        getTodayDate={getTodayDate}
+        onClose={() => setShowHistoryModal(false)}
+        onMonthChange={changeMonth}
+        onDateSelect={setSelectedDate}
+        onViewingMonthChange={setViewingMonth}
+        theme={theme}
+      />
     </View>
   );
 }
@@ -702,7 +1192,7 @@ const styles = StyleSheet.create({
   },
   topBarTitle: {
     fontSize: 22,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   headerButtons: {
     flexDirection: 'row',
@@ -732,69 +1222,79 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '500',
     marginBottom: 12,
   },
-  activityHeader: {
-    marginBottom: 16,
-  },
-  ringsContainer: {
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  ringLegend: {
-    marginTop: 16,
-    gap: 8,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  legendText: {
-    fontSize: 14,
-  },
+
   emptyText: {
     fontSize: 15,
     textAlign: 'center',
     fontStyle: 'italic',
   },
-  exerciseItem: {
+
+  workoutHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    marginBottom: 8,
   },
-  exerciseInfo: {
+  workoutHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  workoutCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  deleteWorkoutButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+  },
+  editNotesIconButton: {
+    padding: 4,
+  },
+  // Shared modal styles (used by Edit Workout Modal)
+  editNotesTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  editNotesInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    minHeight: 120,
+  },
+  editNotesButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  editNotesModalButton: {
     flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
   },
-  exerciseName: {
+  editNotesButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
   },
-  exerciseDetails: {
+  editNotesSection: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  editNotesLabel: {
     fontSize: 14,
-  },
-  notesContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
-  },
-  notesLabel: {
-    fontSize: 13,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  notesText: {
-    fontSize: 14,
-  },
+
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -809,6 +1309,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  backToTodayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  backToTodayText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '600',
+  },
   recentSection: {
     marginTop: 8,
   },
@@ -817,117 +1331,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 12,
   },
-  historyCard: {
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  historyDate: {
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  historyExerciseCount: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  modalScroll: {
-    maxHeight: '100%',
-  },
-  inputLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  input: {
-    padding: 12,
-    borderRadius: 8,
-    fontSize: 16,
-    borderWidth: 1,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 8,
-  },
-  inputColumn: {
-    flex: 1,
-  },
-  notesInput: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  addExerciseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 12,
-    borderWidth: 2,
-  },
-  addExerciseButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  exercisesList: {
-    marginTop: 20,
-  },
-  exercisesListTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  exerciseListItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-  },
-  exerciseListInfo: {
-    flex: 1,
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    padding: 16,
-    borderRadius: 10,
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+
+
   historyDetailCard: {
     borderRadius: 10,
     padding: 14,
@@ -952,115 +1357,20 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     borderTopWidth: 1,
   },
-  stepsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  stepsTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  stepsContent: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  stepsCount: {
-    fontSize: 36,
-    fontWeight: 'bold',
-  },
-  stepsLabel: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  stepsProgressBar: {
-    gap: 8,
-  },
-  stepsProgressBackground: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  stepsProgressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  stepsGoalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  stepsGoalText: {
-    fontSize: 12,
-  },
-  historyModalContent: {
+
+  dayDetailModalContent: {
     borderRadius: 20,
     padding: 20,
     width: '95%',
     maxWidth: 700,
     maxHeight: '85%',
+  },
+  dayDetailScroll: {
     flex: 1,
   },
-  monthNavigation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    gap: 12,
-  },
-  monthNavButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  monthTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    flex: 1,
-    textAlign: 'center',
-  },
-  calendarScrollView: {
-    flex: 1,
-  },
-  calendarScrollContent: {
+  dayDetailContent: {
     paddingBottom: 20,
   },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  calendarDay: {
-    width: '13.5%',
-    aspectRatio: 0.75,
-    borderRadius: 12,
-    padding: 8,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  calendarDayNumber: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  calendarDayName: {
-    fontSize: 9,
-    textTransform: 'uppercase',
-  },
-  miniRingsContainer: {
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  emptyMiniRings: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    opacity: 0.3,
-  },
+
+
 });

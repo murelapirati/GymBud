@@ -19,38 +19,135 @@ interface SettingsScreenProps {
 
 export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals }: SettingsScreenProps) {
   const { theme, isDark, toggleTheme } = useTheme();
-  const [stepOffset, setStepOffset] = useState('300');
+  const [stepMultiplier, setStepMultiplier] = useState('1.33');
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
-    loadStepOffset();
+    loadStepMultiplier();
   }, []);
 
-  const loadStepOffset = async () => {
+  const loadStepMultiplier = async () => {
     try {
-      const offset = await storage.getItem<number>(STORAGE_KEYS.STEP_OFFSET);
-      if (offset !== null) {
-        setStepOffset(offset.toString());
+      const multiplier = await storage.getItem<number>(STORAGE_KEYS.STEP_MULTIPLIER);
+      if (multiplier !== null) {
+        setStepMultiplier(multiplier.toString());
       }
     } catch (error) {
-      console.error('Error loading step offset:', error);
+      console.error('Error loading step multiplier:', error);
     }
   };
 
-  const handleOffsetChange = (value: string) => {
-    setStepOffset(value);
+  const handleMultiplierChange = (value: string) => {
+    setStepMultiplier(value);
     setHasChanges(true);
   };
 
-  const saveStepOffset = async () => {
+  const saveStepMultiplier = async () => {
     try {
-      const offset = parseInt(stepOffset) || 0;
-      await storage.setItem(STORAGE_KEYS.STEP_OFFSET, offset);
+      const multiplier = parseFloat(stepMultiplier) || 1.33;
+      if (multiplier < 0.5 || multiplier > 3.0) {
+        Alert.alert('Invalid Value', 'Multiplier must be between 0.5 and 3.0');
+        return;
+      }
+      await storage.setItem(STORAGE_KEYS.STEP_MULTIPLIER, multiplier);
       setHasChanges(false);
-      Alert.alert('Success', 'Step offset saved. Restart the app to apply changes.');
+      Alert.alert('Success', 'Step multiplier saved. Pull down on home screen to refresh.');
     } catch (error) {
-      console.error('Error saving step offset:', error);
-      Alert.alert('Error', 'Failed to save step offset');
+      console.error('Error saving step multiplier:', error);
+      Alert.alert('Error', 'Failed to save step multiplier');
+    }
+  };
+
+  const handleClearData = () => {
+    Alert.alert(
+      'Clear App Data',
+      'Choose what data you want to clear:',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Clear Workouts Only',
+          style: 'destructive',
+          onPress: () => confirmClearData('workouts'),
+        },
+        {
+          text: 'Clear Calories Only',
+          style: 'destructive',
+          onPress: () => confirmClearData('calories'),
+        },
+        {
+          text: 'Clear All Data',
+          style: 'destructive',
+          onPress: () => confirmClearData('all'),
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const confirmClearData = (type: 'workouts' | 'calories' | 'all') => {
+    const messages = {
+      workouts: 'This will delete all workout history and activity data. This action cannot be undone.',
+      calories: 'This will delete all calorie tracking data. This action cannot be undone.',
+      all: 'This will delete ALL app data including workouts, calories, goals, and settings. This action cannot be undone.',
+    };
+
+    Alert.alert(
+      'Are you sure?',
+      messages[type],
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => clearData(type),
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const clearData = async (type: 'workouts' | 'calories' | 'all') => {
+    try {
+      if (type === 'workouts' || type === 'all') {
+        await storage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, {});
+        await storage.setItem(STORAGE_KEYS.DAILY_ACTIVITY, {});
+        await storage.setItem(STORAGE_KEYS.WORKOUTS, []);
+      }
+      
+      if (type === 'calories' || type === 'all') {
+        await storage.setItem(STORAGE_KEYS.CALORIES, { date: new Date().toISOString().split('T')[0], items: [] });
+      }
+      
+      if (type === 'all') {
+        await storage.setItem(STORAGE_KEYS.GOALS, {
+          calories: 2000,
+          proteinPercent: 30,
+          carbsPercent: 40,
+          fatsPercent: 30,
+        });
+        await storage.setItem(STORAGE_KEYS.WORKOUT_GOALS, {
+          steps: 10000,
+          exerciseMinutes: 30,
+          caloriesBurned: 300,
+        });
+        await storage.setItem(STORAGE_KEYS.RECIPES, []);
+        await storage.setItem(STORAGE_KEYS.GOAL_PRESETS, []);
+      }
+
+      Alert.alert(
+        'Success',
+        'Data cleared successfully. Please restart the app to see changes.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error clearing data:', error);
+      Alert.alert('Error', 'Failed to clear data');
     }
   };
 
@@ -128,24 +225,24 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
             <View style={styles.settingLeft}>
               <Ionicons name="analytics-outline" size={24} color={theme.primary} style={styles.settingIcon} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.settingTitle, { color: theme.text }]}>Step Offset Calibration</Text>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>Step Multiplier</Text>
                 <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
-                  Adjust to match your health app's step count
+                  Health API × multiplier = adjusted steps (default 1.33)
                 </Text>
               </View>
             </View>
             <View style={styles.offsetInputContainer}>
               <TextInput
                 style={[styles.offsetInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                placeholder="300"
+                placeholder="1.33"
                 placeholderTextColor={theme.textSecondary}
-                keyboardType="numeric"
-                value={stepOffset}
-                onChangeText={handleOffsetChange}
+                keyboardType="decimal-pad"
+                value={stepMultiplier}
+                onChangeText={handleMultiplierChange}
               />
               <TouchableOpacity
                 style={[styles.saveOffsetButton, { backgroundColor: hasChanges ? theme.primary : theme.border }]}
-                onPress={saveStepOffset}
+                onPress={saveStepMultiplier}
                 disabled={!hasChanges}
               >
                 <Text style={[styles.saveOffsetButtonText, { color: hasChanges ? 'white' : theme.textSecondary }]}>
@@ -155,6 +252,25 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
             </View>
           </View>
         </View>
+
+        <TouchableOpacity 
+          style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+          onPress={handleClearData}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingRow}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="trash-outline" size={24} color="#ff3b30" style={styles.settingIcon} />
+              <View>
+                <Text style={[styles.settingTitle, { color: '#ff3b30' }]}>Clear App Data</Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  Delete workouts, calories, or all data
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color={theme.textSecondary} />
+          </View>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
