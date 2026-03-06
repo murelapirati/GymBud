@@ -11,6 +11,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useMeasurementSystem } from '../../hooks/useMeasurementSystem';
+import { formatWeight, getWeightLabel } from '../../utils/measurements';
 
 interface WorkoutSet {
   id: string;
@@ -23,10 +25,13 @@ interface WorkoutSet {
 interface WorkoutExercise {
   id: string;
   name: string;
-  sets: WorkoutSet[];
+  sets?: WorkoutSet[]; // Optional for cardio/stretching
   restTimer?: number;
   previousWeight?: number;
   previousReps?: number;
+  duration?: number; // For cardio/stretching (in seconds)
+  distance?: number; // For cardio (in km)
+  type?: string; // Exercise type
 }
 
 interface EditWorkoutModalProps {
@@ -83,6 +88,8 @@ export const EditWorkoutModal: React.FC<EditWorkoutModalProps> = ({
   onNewSetWeightChange,
   theme,
 }) => {
+  const { measurementSystem } = useMeasurementSystem();
+
   return (
     <Modal
       visible={visible}
@@ -121,7 +128,7 @@ export const EditWorkoutModal: React.FC<EditWorkoutModalProps> = ({
               </View>
 
               {/* Exercises */}
-              {exercises.map((exercise) => (
+              {exercises && exercises.length > 0 && exercises.map((exercise) => (
                 <View key={exercise.id} style={[styles.editExerciseCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                   <View style={styles.editExerciseHeader}>
                     <TextInput
@@ -135,19 +142,32 @@ export const EditWorkoutModal: React.FC<EditWorkoutModalProps> = ({
                       <Ionicons name="trash-outline" size={20} color={theme.error} />
                     </TouchableOpacity>
                   </View>
-                  {exercise.sets.map((set, index) => (
-                    <View key={set.id} style={styles.editSetRow}>
-                      <Text style={[styles.editSetText, { color: theme.textSecondary }]}>
-                        Set {index + 1}: {set.reps} reps {set.weight ? `@ ${set.weight}lbs` : ''}
-                      </Text>
-                      <TouchableOpacity onPress={() => onDeleteSet(exercise.id, set.id)}>
-                        <Ionicons name="close-circle-outline" size={18} color={theme.error} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
+                  {exercise.sets && exercise.sets.length > 0 && exercise.sets.map((set, index) => {
+                    const formattedWeight = set.weight ? formatWeight(set.weight, measurementSystem, 1) : '';
+                    return (
+                      <View key={set.id} style={styles.editSetRow}>
+                        <Text style={[styles.editSetText, { color: theme.textSecondary }]}>
+                          Set {index + 1}: {set.reps} reps {formattedWeight ? `@ ${formattedWeight}` : ''}
+                        </Text>
+                        <TouchableOpacity onPress={() => onDeleteSet(exercise.id, set.id)}>
+                          <Ionicons name="close-circle-outline" size={18} color={theme.error} />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
 
-                  {/* Add Set Section */}
-                  {addingSetToExerciseId === exercise.id ? (
+                  {/* Duration info for cardio/stretching exercises */}
+                  {!exercise.sets && (exercise.duration || exercise.distance) && (
+                    <View style={styles.editSetRow}>
+                      <Text style={[styles.editSetText, { color: theme.textSecondary }]}>
+                        {exercise.duration && `Duration: ${Math.floor(exercise.duration / 60)}:${String(exercise.duration % 60).padStart(2, '0')}`}
+                        {exercise.distance && ` • Distance: ${exercise.distance.toFixed(2)}km`}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Add Set Section - only for exercises with sets (gym/calisthenics) */}
+                  {exercise.sets && addingSetToExerciseId === exercise.id ? (
                     <View style={[styles.addSetSection, { borderColor: theme.border }]}>
                       <View style={styles.addSetInputs}>
                         <TextInput
@@ -162,7 +182,7 @@ export const EditWorkoutModal: React.FC<EditWorkoutModalProps> = ({
                           style={[styles.addSetInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
                           value={newSetWeight}
                           onChangeText={onNewSetWeightChange}
-                          placeholder="Weight (lbs)"
+                          placeholder={getWeightLabel(measurementSystem, false).replace('Weight ', '')}
                           placeholderTextColor={theme.textSecondary}
                           keyboardType="decimal-pad"
                         />
@@ -182,7 +202,7 @@ export const EditWorkoutModal: React.FC<EditWorkoutModalProps> = ({
                         </TouchableOpacity>
                       </View>
                     </View>
-                  ) : (
+                  ) : exercise.sets ? (
                     <TouchableOpacity
                       style={styles.addSetTrigger}
                       onPress={() => onAddSetClick(exercise.id)}
@@ -190,7 +210,7 @@ export const EditWorkoutModal: React.FC<EditWorkoutModalProps> = ({
                       <Ionicons name="add-circle-outline" size={18} color={theme.primary} />
                       <Text style={[styles.addSetTriggerText, { color: theme.primary }]}>Add Set</Text>
                     </TouchableOpacity>
-                  )}
+                  ) : null}
                 </View>
               ))}
 

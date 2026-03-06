@@ -10,7 +10,7 @@ interface ActiveWorkoutStatusBarProps {
 
 const ActiveWorkoutStatusBar: React.FC<ActiveWorkoutStatusBarProps> = ({ onPress }) => {
   const { theme } = useTheme();
-  const { workoutDuration, activeRestTimer } = useActiveWorkout();
+  const { workoutDuration, activeRestTimer, workoutType } = useActiveWorkout();
 
   const formatTime = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -23,6 +23,23 @@ const ActiveWorkoutStatusBar: React.FC<ActiveWorkoutStatusBarProps> = ({ onPress
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const getWorkoutTypeInfo = () => {
+    switch (workoutType) {
+      case 'gym':
+        return { icon: 'barbell' as keyof typeof Ionicons.glyphMap, label: 'Gym' };
+      case 'cardio':
+        return { icon: 'heart' as keyof typeof Ionicons.glyphMap, label: 'Cardio' };
+      case 'calisthenics':
+        return { icon: 'body' as keyof typeof Ionicons.glyphMap, label: 'Calisthenics' };
+      case 'stretching':
+        return { icon: 'fitness' as keyof typeof Ionicons.glyphMap, label: 'Stretching' };
+      default:
+        return { icon: 'barbell' as keyof typeof Ionicons.glyphMap, label: 'Workout' };
+    }
+  };
+
+  const workoutInfo = getWorkoutTypeInfo();
+
   return (
     <TouchableOpacity 
       style={[styles.container, { backgroundColor: '#10b981' }]} 
@@ -31,8 +48,8 @@ const ActiveWorkoutStatusBar: React.FC<ActiveWorkoutStatusBarProps> = ({ onPress
     >
       <View style={styles.content}>
         <View style={styles.leftSection}>
-          <Ionicons name="barbell" size={18} color="white" />
-          <Text style={styles.text}>Ongoing Workout</Text>
+          <Ionicons name={workoutInfo.icon} size={18} color="white" />
+          <Text style={styles.text}>Active {workoutInfo.label} Workout</Text>
           <Text style={styles.timer}>{formatTime(workoutDuration)}</Text>
         </View>
         {activeRestTimer !== null && activeRestTimer > 0 && (

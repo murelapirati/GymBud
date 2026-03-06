@@ -15,6 +15,7 @@ interface DailyActivityData {
   steps: number;
   exerciseMinutes: number;
   caloriesBurned: number;
+  lastUpdated?: number; // Timestamp of when this data was last saved
 }
 
 interface DailyActivityHistory {

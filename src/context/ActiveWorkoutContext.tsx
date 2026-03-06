@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Vibration } from 'react-native';
+import { Vibration, Alert } from 'react-native';
 import { storage, STORAGE_KEYS } from '../utils/storage';
+import { WorkoutTemplate, TemplateExercise } from '../types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type WorkoutType = 'gym' | 'cardio' | 'calisthenics' | 'stretching';
 
@@ -84,6 +86,7 @@ interface ActiveWorkoutContextType {
   clearRestTimerCompleted: () => void;
   clearStretchTimerCompleted: () => void;
   startWorkout: (type: WorkoutType) => void;
+  startWorkoutFromTemplate: (template: WorkoutTemplate) => Promise<void>;
   finishWorkout: (notes?: string, intensity?: number) => void;
   cancelWorkout: () => void;
   // Gym & Calisthenics
@@ -104,6 +107,7 @@ interface ActiveWorkoutContextType {
   updateStretchingActivity: (id: string, name: string, duration: number) => void;
   // Common
   deleteExercise: (exerciseId: string) => void;
+  moveExercise: (exerciseId: string, direction: 'up' | 'down') => void;
   startRestTimer: (seconds: number) => void;
   cancelRestTimer: () => void;
   finishExercise: (exerciseId: string) => void;
@@ -230,6 +234,89 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     setRestTimerEndTime(null);
   };
 
+  const startWorkoutFromTemplate = async (template: WorkoutTemplate) => {
+    try {
+      if (!template || !template.exercises || !Array.isArray(template.exercises)) {
+        throw new Error('Invalid template data');
+      }
+
+      if (template.exercises.length === 0) {
+        Alert.alert('Empty Template', 'This template has no exercises');
+        return;
+      }
+
+      // Convert template exercises to workout exercises based on workout type
+      const baseTimestamp = Date.now();
+      const workoutExercises: WorkoutExercise[] = template.exercises.map((te, index) => {
+        const uniqueId = `${baseTimestamp}_${index}`;
+        
+        const baseExercise = {
+          id: uniqueId,
+          name: te.name,
+          type: template.workoutType, // Always set type from template
+        };
+
+        if (template.workoutType === 'gym' || template.workoutType === 'calisthenics') {
+          return {
+            ...baseExercise,
+            sets: [],
+            restTimer: te.restTimer || 90,
+          } as WorkoutExercise;
+        } else if (template.workoutType === 'cardio') {
+          return {
+            ...baseExercise,
+            duration: 0,
+            isActive: false,
+            isPaused: false,
+            pausedDuration: 0,
+          } as WorkoutExercise;
+        } else if (template.workoutType === 'stretching') {
+          return {
+            ...baseExercise,
+            duration: te.duration || 30,
+            completed: false,
+          } as WorkoutExercise;
+        }
+
+        // Fallback (should never reach here)
+        return {
+          ...baseExercise,
+          sets: [],
+          restTimer: 90,
+        } as WorkoutExercise;
+      });
+
+      // Validate the converted exercises
+      if (!workoutExercises.every(ex => ex && ex.id && ex.name && ex.type)) {
+        throw new Error('Failed to convert template exercises');
+      }
+
+      // Start the workout with pre-filled exercises
+      setIsWorkoutActive(true);
+      setWorkoutStartTime(new Date());
+      setWorkoutDuration(0);
+      setWorkoutType(template.workoutType);
+      setExercises(workoutExercises);
+      setActiveRestTimer(null);
+      setRestTimerEndTime(null);
+
+      // Update template's lastUsed timestamp
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUT_TEMPLATES);
+      if (stored) {
+        const templates: WorkoutTemplate[] = JSON.parse(stored);
+        const updated = templates.map(t => 
+          t.id === template.id ? { ...t, lastUsed: Date.now() } : t
+        );
+        await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_TEMPLATES, JSON.stringify(updated));
+      }
+    } catch (error) {
+      console.error('Error starting workout from template:', error);
+      // Still start the workout even if template update fails
+      setIsWorkoutActive(false);
+      alert('Error loading template. Please try again.');
+    }
+  };
+
   const finishWorkout = async (notes?: string, intensity?: number) => {
     if (!workoutStartTime) return;
 
@@ -282,6 +369,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
       // Calorie calculation based on intensity: 3-10 cal/min (3 + intensity*0.7)
       const caloriesPerMinute = intensity !== undefined ? (3 + intensity * 0.7) : 5;
       existingActivity.caloriesBurned += Math.floor(durationMinutes * caloriesPerMinute);
+      existingActivity.lastUpdated = Date.now(); // Track when this was saved
       dailyActivity[dateStr] = existingActivity;
       await storage.setItem(STORAGE_KEYS.DAILY_ACTIVITY, dailyActivity);
     } catch (error) {
@@ -501,6 +589,24 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     setExercises(prev => prev.filter(ex => ex.id !== exerciseId));
   };
 
+  const moveExercise = (exerciseId: string, direction: 'up' | 'down') => {
+    setExercises(prev => {
+      const currentIndex = prev.findIndex(ex => ex.id === exerciseId);
+      if (currentIndex === -1) return prev;
+      
+      const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      
+      // Check bounds
+      if (newIndex < 0 || newIndex >= prev.length) return prev;
+      
+      // Swap exercises
+      const newExercises = [...prev];
+      [newExercises[currentIndex], newExercises[newIndex]] = [newExercises[newIndex], newExercises[currentIndex]];
+      
+      return newExercises;
+    });
+  };
+
   const startRestTimer = (seconds: number) => {
     if (seconds > 0) {
       const endTime = new Date(Date.now() + seconds * 1000);
@@ -554,6 +660,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
         clearRestTimerCompleted,
         clearStretchTimerCompleted,
         startWorkout,
+        startWorkoutFromTemplate,
         finishWorkout,
         cancelWorkout,
         addExercise,
@@ -561,6 +668,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
         updateSet,
         deleteSet,
         deleteExercise,
+        moveExercise,
         addCardioActivity,
         startCardioTimer,
         pauseCardioTimer,

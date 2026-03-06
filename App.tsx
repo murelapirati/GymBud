@@ -6,6 +6,7 @@ import { ActiveWorkoutProvider, useActiveWorkout } from './src/context/ActiveWor
 import ActiveWorkoutStatusBar from './src/components/ActiveWorkoutStatusBar';
 import RestTimerStatusBar from './src/components/RestTimerStatusBar';
 import CaloriesScreen from './src/screens/CaloriesScreen';
+import LibraryScreen from './src/screens/LibraryScreen';
 import WorkoutsScreen from './src/screens/WorkoutsScreen';
 import ActiveWorkoutScreen from './src/screens/ActiveWorkoutScreen';
 import RestTimerScreen from './src/screens/RestTimerScreen';
@@ -101,6 +102,8 @@ function MainApp() {
     switch (activeScreen) {
       case 'Calories':
         return <CaloriesScreen onOpenSettings={() => setShowSettings(true)} />;
+      case 'Library':
+        return <LibraryScreen onOpenSettings={() => setShowSettings(true)} />;
       case 'Workouts':
         return <WorkoutsScreen 
           onOpenSettings={() => setShowSettings(true)}
@@ -160,7 +163,24 @@ function MainApp() {
               styles.tabText, 
               { color: activeScreen === 'Calories' ? theme.tabBarActive : theme.tabBarInactive }
             ]}>
-              Calorie Tracker
+              Calories
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.tab}
+            onPress={() => setActiveScreen('Library')}
+          >
+            <Ionicons 
+              name="library-outline" 
+              size={28} 
+              color={activeScreen === 'Library' ? theme.tabBarActive : theme.tabBarInactive}
+              style={styles.tabIcon}
+            />
+            <Text style={[
+              styles.tabText, 
+              { color: activeScreen === 'Library' ? theme.tabBarActive : theme.tabBarInactive }
+            ]}>
+              Library
             </Text>
           </TouchableOpacity>
           <TouchableOpacity

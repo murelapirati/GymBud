@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Theme } from '../../utils/theme';
+import { useMeasurementSystem } from '../../hooks/useMeasurementSystem';
+import { formatWeight } from '../../utils/measurements';
 
 export type WorkoutType = 'gym' | 'cardio' | 'calisthenics' | 'stretching';
 
@@ -58,6 +60,8 @@ export const WorkoutCard: React.FC<WorkoutCardProps> = ({
   onDelete,
   onAddNotes,
 }) => {
+  const { measurementSystem } = useMeasurementSystem();
+
   const getIntensityLabel = (intensity: number) => {
     if (intensity === 0) return 'Very Easy';
     if (intensity <= 3) return 'Easy';
@@ -175,6 +179,7 @@ export const WorkoutCard: React.FC<WorkoutCardProps> = ({
             ? exercise.sets[0]?.weight
             : exercise.sets[0]?.extraWeight;
           const weightLabel = exercise.type === 'calisthenics' && displayWeight ? ' extra' : '';
+          const formattedWeight = displayWeight ? formatWeight(displayWeight, measurementSystem, 1) : '';
           
           return (
             <View key={exercise.id} style={styles.exerciseItem}>
@@ -185,7 +190,7 @@ export const WorkoutCard: React.FC<WorkoutCardProps> = ({
                 <Text style={[styles.exerciseDetails, { color: theme.textSecondary }]}>
                   {exercise.sets?.length || 0} sets
                   {exercise.sets && exercise.sets.length > 0 && ` × ${exercise.sets[0].reps} reps`}
-                  {displayWeight ? ` @ ${displayWeight}lbs${weightLabel}` : ''}
+                  {formattedWeight ? ` @ ${formattedWeight}${weightLabel}` : ''}
                 </Text>
               </View>
             </View>

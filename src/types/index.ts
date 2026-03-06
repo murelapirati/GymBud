@@ -8,6 +8,29 @@ export interface FoodEntry {
   fat?: number;
   timestamp: number;
   date: string; // YYYY-MM-DD format
+  barcode?: string; // for scanned products
+}
+
+// Scanned product from OpenFoodFacts API
+export interface ScannedProduct {
+  barcode: string;
+  name: string;
+  brand?: string;
+  servingSize: number; // in grams
+  servingSizeUnit: string; // 'g', 'ml', etc.
+  nutriments: {
+    energyKcal: number; // calories per 100g
+    proteins: number; // grams per 100g
+    carbohydrates: number; // grams per 100g
+    fat: number; // grams per 100g
+  };
+  imageUrl?: string;
+}
+
+// Cached product for offline access
+export interface CachedProduct extends ScannedProduct {
+  cachedAt: number;
+  lastUsed: number;
 }
 
 export interface DailyCalories {
@@ -103,6 +126,24 @@ export interface Workout {
   notes?: string;
   createdAt: number;
   intensity?: number;
+}
+
+// Workout Template types
+export interface WorkoutTemplate {
+  id: string;
+  name: string;
+  workoutType: WorkoutType;
+  exercises: TemplateExercise[];
+  createdAt: number;
+  lastUsed?: number;
+}
+
+export interface TemplateExercise {
+  id: string;
+  name: string;
+  restTimer?: number; // for gym/calisthenics
+  duration?: number; // for cardio/stretching (default duration)
+  type?: 'gym' | 'calisthenics' | 'cardio' | 'stretching'; // exercise type within template
 }
 
 // Storage data structures

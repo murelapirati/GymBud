@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -17,6 +17,10 @@ import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useActiveWorkout } from '../context/ActiveWorkoutContext';
+import { useMeasurementSystem } from '../hooks/useMeasurementSystem';
+import { formatWeight, getWeightLabel, convertWeightToStorage, convertWeightForDisplay } from '../utils/measurements';
+import { storage, STORAGE_KEYS } from '../utils/storage';
+import type { WorkoutTemplate, TemplateExercise } from '../types';
 
 interface ActiveWorkoutScreenProps {
   onBack: () => void;
@@ -26,6 +30,7 @@ interface ActiveWorkoutScreenProps {
 
 const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, collapsedExercises, setCollapsedExercises }) => {
   const { theme } = useTheme();
+  const { measurementSystem } = useMeasurementSystem();
   const {
     exercises,
     workoutDuration,
@@ -42,6 +47,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
     updateSet,
     deleteSet,
     deleteExercise,
+    moveExercise,
     addCardioActivity,
     startCardioTimer,
     pauseCardioTimer,
@@ -70,6 +76,12 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
   const [restPickerMinutes, setRestPickerMinutes] = useState(3);
   const [restPickerSeconds, setRestPickerSeconds] = useState(0);
   
+  // Template saving state
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [justFinishedExercises, setJustFinishedExercises] = useState<any[]>([]);
+  const [justFinishedWorkoutType, setJustFinishedWorkoutType] = useState<string | null>(null);
+  
   // Cardio-specific state
   const [cardioDuration, setCardioDuration] = useState('');
   const [cardioDistance, setCardioDistance] = useState('');
@@ -77,6 +89,17 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
   
   // Stretching-specific state
   const [stretchingDuration, setStretchingDuration] = useState('');
+
+  // Debug: Log exercises when they change
+  useEffect(() => {
+    console.log('ActiveWorkoutScreen: exercises updated', exercises?.length || 0);
+    if (!exercises) {
+      console.error('EXERCISES IS NULL/UNDEFINED!');
+    }
+  }, [exercises]);
+
+  // Guard: Ensure exercises is always an array
+  const safeExercises = Array.isArray(exercises) ? exercises : [];
 
   const formatTime = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -121,7 +144,9 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
     if (!activeExerciseId || !reps) return;
 
     const repsNum = parseInt(reps);
-    const weightNum = weight ? parseFloat(weight) : undefined;
+    const weightInput = weight ? parseFloat(weight) : undefined;
+    // Convert weight to lbs for storage
+    const weightNum = weightInput ? convertWeightToStorage(weightInput, measurementSystem) : undefined;
 
     if (editingSetId) {
       updateSet(activeExerciseId, editingSetId, repsNum, weightNum);
@@ -141,7 +166,9 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
     
     if (pendingExerciseId && reps) {
       const repsNum = parseInt(reps);
-      const weightNum = weight ? parseFloat(weight) : undefined;
+      const weightInput = weight ? parseFloat(weight) : undefined;
+      // Convert weight to lbs for storage
+      const weightNum = weightInput ? convertWeightToStorage(weightInput, measurementSystem) : undefined;
       
       // Log the set with the selected rest time
       logSet(pendingExerciseId, repsNum, weightNum, totalSeconds);
@@ -167,7 +194,9 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
     
     if (pendingExerciseId && reps) {
       const repsNum = parseInt(reps);
-      const weightNum = weight ? parseFloat(weight) : undefined;
+      const weightInput = weight ? parseFloat(weight) : undefined;
+      // Convert weight to lbs for storage
+      const weightNum = weightInput ? convertWeightToStorage(weightInput, measurementSystem) : undefined;
       
       // Log the set with no rest time
       logSet(pendingExerciseId, repsNum, weightNum, 0);
@@ -192,7 +221,9 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
       setReps(String(set.reps));
       // Handle both gym (weight) and calisthenics (extraWeight)
       const weightValue = 'weight' in set ? set.weight : 'extraWeight' in set ? set.extraWeight : undefined;
-      setWeight(weightValue ? String(weightValue) : '');
+      // Convert from storage (lbs) to display units
+      const displayWeight = weightValue ? convertWeightForDisplay(weightValue, measurementSystem) : undefined;
+      setWeight(displayWeight ? String(displayWeight.toFixed(1)) : '');
     }
   };
 
@@ -244,12 +275,102 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
     setShowFinishModal(true);
   };
 
-  const confirmFinishWorkout = () => {
+  const generateTemplateName = (exercises: any[]): string => {
+    if (exercises.length === 0) return 'Workout Template';
+    if (exercises.length === 1) return exercises[0].name;
+    if (exercises.length === 2) return `${exercises[0].name}, ${exercises[1].name}`;
+    // For 3+ exercises, show first two and count
+    return `${exercises[0].name}, ${exercises[1].name} +${exercises.length - 2}`;
+  };
+
+  const saveWorkoutAsTemplate = async () => {
+    if (!templateName.trim() || !justFinishedWorkoutType) {
+      Alert.alert('Error', 'Please enter a template name');
+      return;
+    }
+
+    try {
+      // Load existing templates
+      const templates = await storage.getItem<WorkoutTemplate[]>(STORAGE_KEYS.WORKOUT_TEMPLATES) || [];
+      
+      // Convert exercises to template format (without sets data)
+      const templateExercises: TemplateExercise[] = justFinishedExercises.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        restTimer: ex.restTimer,
+        duration: ex.duration,
+        type: ex.type,
+      }));
+
+      // Create new template
+      const newTemplate: WorkoutTemplate = {
+        id: Date.now().toString(),
+        name: templateName.trim(),
+        workoutType: justFinishedWorkoutType as any,
+        exercises: templateExercises,
+        createdAt: Date.now(),
+      };
+
+      // Add and save
+      templates.push(newTemplate);
+      await storage.setItem(STORAGE_KEYS.WORKOUT_TEMPLATES, templates);
+
+      Alert.alert('Success', 'Workout saved as template!');
+      setShowSaveTemplateModal(false);
+      setTemplateName('');
+      setJustFinishedExercises([]);
+      setJustFinishedWorkoutType(null);
+    } catch (error) {
+      console.error('Error saving template:', error);
+      Alert.alert('Error', 'Failed to save template');
+    }
+  };
+
+  const confirmFinishWorkout = async () => {
+    const currentExercises = [...exercises];
+    const currentType = workoutType;
+    
+    // Finish the workout first
     finishWorkout(finishNotes.trim() || undefined, finishIntensity);
     setShowFinishModal(false);
     setFinishNotes('');
     setFinishIntensity(5);
-    onBack();
+    
+    // Check if user wants to be prompted to save templates
+    const shouldPrompt = await storage.getItem<boolean>(STORAGE_KEYS.PROMPT_SAVE_TEMPLATE);
+    
+    // If there are exercises and prompt is enabled, ask to save as template
+    if (currentExercises.length > 0 && shouldPrompt) {
+      setJustFinishedExercises(currentExercises);
+      setJustFinishedWorkoutType(currentType);
+      setTemplateName(generateTemplateName(currentExercises));
+      
+      // Show save template modal with a slight delay so finish modal closes first
+      setTimeout(() => {
+        Alert.alert(
+          'Save Workout?',
+          'Would you like to save this workout to your library for future use?',
+          [
+            {
+              text: 'No',
+              style: 'cancel',
+              onPress: () => {
+                setJustFinishedExercises([]);
+                setJustFinishedWorkoutType(null);
+                onBack();
+              },
+            },
+            {
+              text: 'Yes',
+              onPress: () => setShowSaveTemplateModal(true),
+            },
+          ],
+          { cancelable: false }
+        );
+      }, 300);
+    } else {
+      onBack();
+    }
   };
 
   const handleCancelWorkout = () => {
@@ -287,6 +408,25 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
   const workoutTypeInfo = getWorkoutTypeInfo();
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Debug: Test button to see if touches work at all */}
+      <TouchableOpacity 
+        onPress={() => {
+          console.log('DEBUG: Touch detected!');
+          Alert.alert('Touch Works', 'Touches are registering');
+        }}
+        style={{
+          position: 'absolute',
+          top: 100,
+          right: 10,
+          backgroundColor: 'red',
+          padding: 10,
+          zIndex: 9999,
+          elevation: 9999,
+        }}
+      >
+        <Text style={{ color: 'white', fontWeight: 'bold' }}>TEST</Text>
+      </TouchableOpacity>
+      
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -390,7 +530,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                 <TextInput
                   style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
                   placeholder="5"
-                  placeholderTextColor={theme.textSecondary}
+                  placeholderTextColor={theme.textTertiary}
                   keyboardType="numeric"
                   value={stretchingDuration}
                   onChangeText={setStretchingDuration}
@@ -408,9 +548,19 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
           ) : null}
 
           {/* Exercises List */}
-          {exercises.map((exercise) => {
-            const isActive = exercise.id === activeExerciseId;
-            const isCollapsed = collapsedExercises.has(exercise.id);
+          {Array.isArray(exercises) && exercises.length > 0 ? (
+            <>
+              <Text style={[{ color: theme.text, padding: 10 }]}>
+                Rendering {exercises.length} exercises...
+              </Text>
+              {exercises.map((exercise, exerciseIndex) => {
+                if (!exercise || !exercise.id) {
+                  console.warn('Invalid exercise at index', exerciseIndex);
+                  return null;
+                }
+                
+                const isActive = exercise.id === activeExerciseId;
+                const isCollapsed = collapsedExercises.has(exercise.id);
 
             // Render cardio activity
             if (exercise.type === 'cardio') {
@@ -425,14 +575,38 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
               };
 
               return (
-                <View key={exercise.id} style={[styles.card, { backgroundColor: theme.card }]}>
+                <View key={exercise.id || `cardio-${exerciseIndex}`} style={[styles.card, { backgroundColor: theme.card }]}>
                   <View style={styles.exerciseHeader}>
                     <Text style={[styles.exerciseName, { color: theme.text }]}>
                       {exercise.name}
                     </Text>
-                    <TouchableOpacity onPress={() => handleDeleteExercise(exercise.id)}>
-                      <Ionicons name="close-circle" size={24} color={theme.error} />
-                    </TouchableOpacity>
+                    <View style={styles.exerciseActions}>
+                      <TouchableOpacity 
+                        onPress={() => moveExercise(exercise.id, 'up')}
+                        disabled={exerciseIndex === 0}
+                        style={{ opacity: exerciseIndex === 0 ? 0.3 : 1 }}
+                      >
+                        <Ionicons 
+                          name="arrow-up" 
+                          size={20} 
+                          color={theme.textSecondary} 
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => moveExercise(exercise.id, 'down')}
+                        disabled={exerciseIndex === exercises.length - 1}
+                        style={{ opacity: exerciseIndex === exercises.length - 1 ? 0.3 : 1 }}
+                      >
+                        <Ionicons 
+                          name="arrow-down" 
+                          size={20} 
+                          color={theme.textSecondary} 
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDeleteExercise(exercise.id)}>
+                        <Ionicons name="close-circle" size={24} color={theme.error} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Live Timer Display */}
@@ -536,7 +710,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
               const isTimerActive = activeStretchId === exercise.id;
 
               return (
-                <View key={exercise.id} style={[styles.card, { backgroundColor: theme.card }]}>
+                <View key={exercise.id || `stretch-${exerciseIndex}`} style={[styles.card, { backgroundColor: theme.card }]}>
                   <View style={styles.exerciseHeader}>
                     <Text style={[styles.exerciseName, { color: theme.text }]}>
                       {exercise.name}
@@ -544,9 +718,33 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                         <Ionicons name="checkmark-circle" size={20} color={theme.success} style={{ marginLeft: 8 }} />
                       )}
                     </Text>
-                    <TouchableOpacity onPress={() => handleDeleteExercise(exercise.id)}>
-                      <Ionicons name="close-circle" size={24} color={theme.error} />
-                    </TouchableOpacity>
+                    <View style={styles.exerciseActions}>
+                      <TouchableOpacity 
+                        onPress={() => moveExercise(exercise.id, 'up')}
+                        disabled={exerciseIndex === 0}
+                        style={{ opacity: exerciseIndex === 0 ? 0.3 : 1 }}
+                      >
+                        <Ionicons 
+                          name="arrow-up" 
+                          size={20} 
+                          color={theme.textSecondary} 
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => moveExercise(exercise.id, 'down')}
+                        disabled={exerciseIndex === exercises.length - 1}
+                        style={{ opacity: exerciseIndex === exercises.length - 1 ? 0.3 : 1 }}
+                      >
+                        <Ionicons 
+                          name="arrow-down" 
+                          size={20} 
+                          color={theme.textSecondary} 
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDeleteExercise(exercise.id)}>
+                        <Ionicons name="close-circle" size={24} color={theme.error} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Timer Display */}
@@ -594,7 +792,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
 
             // Render gym/calisthenics exercise (with sets)
             return (
-              <View key={exercise.id} style={[styles.card, { backgroundColor: theme.card }]}>
+              <View key={exercise.id || `exercise-${exerciseIndex}`} style={[styles.card, { backgroundColor: theme.card }]}>
                 <View style={styles.exerciseHeader}>
                   <Text style={[styles.exerciseName, { color: theme.text }]}>
                     {exercise.name}
@@ -605,6 +803,28 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                     )}
                   </Text>
                   <View style={styles.exerciseActions}>
+                    <TouchableOpacity 
+                      onPress={() => moveExercise(exercise.id, 'up')}
+                      disabled={exerciseIndex === 0}
+                      style={{ opacity: exerciseIndex === 0 ? 0.3 : 1 }}
+                    >
+                      <Ionicons 
+                        name="arrow-up" 
+                        size={20} 
+                        color={theme.textSecondary} 
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      onPress={() => moveExercise(exercise.id, 'down')}
+                      disabled={exerciseIndex === exercises.length - 1}
+                      style={{ opacity: exerciseIndex === exercises.length - 1 ? 0.3 : 1 }}
+                    >
+                      <Ionicons 
+                        name="arrow-down" 
+                        size={20} 
+                        color={theme.textSecondary} 
+                      />
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => toggleCollapseExercise(exercise.id)}>
                       <Ionicons 
                         name={isCollapsed ? "chevron-down" : "chevron-up"} 
@@ -626,6 +846,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                         ? (set as any).weight 
                         : (set as any).extraWeight;
                       const weightLabel = exercise.type === 'calisthenics' ? 'extra' : '';
+                      const formattedWeight = displayWeight ? formatWeight(displayWeight, measurementSystem, 1) : '';
 
                       return (
                         <View key={set.id} style={[styles.setRow, { borderColor: theme.border }]}>
@@ -635,7 +856,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                           </View>
                           <View style={styles.setMiddleSection}>
                             <Text style={[styles.setText, { color: theme.text }]}>
-                              {set.reps} reps{displayWeight ? ` × ${displayWeight}lbs ${weightLabel}` : ''}
+                              {set.reps} reps{formattedWeight ? ` × ${formattedWeight} ${weightLabel}` : ''}
                             </Text>
                             <Text style={[styles.restTimeText, { color: theme.textSecondary }]}>
                               {formatRestTime(set.restTime)}
@@ -661,7 +882,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                       <TextInput
                         style={[styles.smallInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
                         placeholder="10"
-                        placeholderTextColor={theme.textSecondary}
+                        placeholderTextColor={theme.textTertiary}
                         keyboardType="number-pad"
                         value={isActive ? reps : ''}
                         onChangeText={(text) => {
@@ -673,12 +894,12 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                     </View>
                     <View style={styles.inputColumn}>
                       <Text style={[styles.inputLabel, { color: theme.text }]}>
-                        {exercise.type === 'calisthenics' ? 'Extra Weight (lbs)' : 'Weight (lbs)'}
+                        {getWeightLabel(measurementSystem, exercise.type === 'calisthenics')}
                       </Text>
                       <TextInput
                         style={[styles.smallInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                        placeholder={exercise.type === 'calisthenics' ? '0' : '135'}
-                        placeholderTextColor={theme.textSecondary}
+                        placeholder={exercise.type === 'calisthenics' ? '0' : (measurementSystem === 'metric' ? '60' : '135')}
+                        placeholderTextColor={theme.textTertiary}
                         keyboardType="numeric"
                         value={isActive ? weight : ''}
                         onChangeText={(text) => {
@@ -718,6 +939,14 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
               </View>
             );
           })}
+            </>
+          ) : (
+            <View style={[styles.card, { backgroundColor: theme.card, padding: 20 }]}>
+              <Text style={[{ color: theme.textSecondary, textAlign: 'center' }]}>
+                No exercises yet. Add one to get started!
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -871,6 +1100,73 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                   onPress={confirmFinishWorkout}
                 >
                   <Text style={[styles.finishModalButtonText, { color: 'white' }]}>Finish</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Save as Template Modal */}
+      <Modal
+        visible={showSaveTemplateModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowSaveTemplateModal(false);
+          onBack();
+        }}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.finishModal, { backgroundColor: theme.card }]}>
+              <Text style={[styles.finishModalTitle, { color: theme.text }]}>Save Workout</Text>
+              
+              <Text style={[styles.templateDescription, { color: theme.textSecondary }]}>
+                Save this workout to your library to quickly start similar workouts in the future.
+              </Text>
+
+              <View style={styles.notesSection}>
+                <Text style={[styles.notesLabel, { color: theme.text }]}>Workout Name</Text>
+                <TextInput
+                  style={[styles.input, { 
+                    backgroundColor: theme.surface, 
+                    color: theme.text,
+                    borderColor: theme.border 
+                  }]}
+                  value={templateName}
+                  onChangeText={setTemplateName}
+                  placeholder="Enter template name"
+                  placeholderTextColor={theme.textTertiary}
+                  autoFocus
+                />
+              </View>
+
+              <View style={styles.finishModalButtons}>
+                <TouchableOpacity
+                  style={[styles.finishModalButton, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}
+                  onPress={() => {
+                    setShowSaveTemplateModal(false);
+                    setTemplateName('');
+                    setJustFinishedExercises([]);
+                    setJustFinishedWorkoutType(null);
+                    onBack();
+                  }}
+                >
+                  <Text style={[styles.finishModalButtonText, { color: theme.text }]}>Skip</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.finishModalButton, { backgroundColor: theme.primary }]}
+                  onPress={() => {
+                    saveWorkoutAsTemplate();
+                    onBack();
+                  }}
+                >
+                  <Ionicons name="save-outline" size={20} color="white" />
+                  <Text style={[styles.finishModalButtonText, { color: 'white', marginLeft: 8 }]}>Save Template</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1153,6 +1449,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     marginBottom: 24,
+    textAlign: 'center',
+  },
+  templateDescription: {
+    fontSize: 14,
+    marginBottom: 20,
+    lineHeight: 20,
     textAlign: 'center',
   },
   intensitySection: {

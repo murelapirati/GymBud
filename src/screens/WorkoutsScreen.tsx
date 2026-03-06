@@ -21,17 +21,20 @@ import { useTheme } from '../context/ThemeContext';
 import { useActiveWorkout } from '../context/ActiveWorkoutContext';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 import { healthService } from '../utils/healthService';
+import { useMeasurementSystem } from '../hooks/useMeasurementSystem';
+import { convertWeightToStorage, convertWeightForDisplay } from '../utils/measurements';
 import ActivityRings from '../components/ActivityRings';
 import MiniActivityRings from '../components/MiniActivityRings';
 import { ActivityRingsCard } from '../components/workout/ActivityRingsCard';
 import { StepCounterCard } from '../components/workout/StepCounterCard';
 import { WorkoutCard } from '../components/workout/WorkoutCard';
-import { WorkoutHistoryCard } from '../components/workout/WorkoutHistoryCard';
 import { EditNotesModal } from '../components/workout/EditNotesModal';
 import { EditWorkoutModal } from '../components/workout/EditWorkoutModal';
 import { CalendarModal } from '../components/workout/CalendarModal';
 import { ActiveWorkoutModal } from '../components/workout/ActiveWorkoutModal';
 import { WorkoutTypeSelectionModal, type WorkoutType } from '../components/workout/WorkoutTypeSelectionModal';
+import { WorkoutStartOptionsModal } from '../components/workout/WorkoutStartOptionsModal';
+import { TemplateSelectionModal } from '../components/workout/TemplateSelectionModal';
 
 interface WorkoutsScreenProps {
   onOpenSettings: () => void;
@@ -77,6 +80,7 @@ interface DailyActivityData {
   steps: number;
   exerciseMinutes: number;
   caloriesBurned: number;
+  lastUpdated?: number; // Timestamp of when this data was last saved
 }
 
 interface DailyActivityHistory {
@@ -90,10 +94,14 @@ const getTodayDate = () => {
 
 export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: WorkoutsScreenProps) {
   const { theme } = useTheme();
-  const { startWorkout: contextStartWorkout, isWorkoutActive, workoutDuration } = useActiveWorkout();
+  const { startWorkout: contextStartWorkout, startWorkoutFromTemplate, isWorkoutActive, workoutDuration } = useActiveWorkout();
+  const { measurementSystem } = useMeasurementSystem();
   const [workoutHistory, setWorkoutHistory] = useState<WorkoutHistory>({});
   const [dailyActivityHistory, setDailyActivityHistory] = useState<DailyActivityHistory>({});
   const [showWorkoutTypeModal, setShowWorkoutTypeModal] = useState(false);
+  const [showStartOptionsModal, setShowStartOptionsModal] = useState(false);
+  const [showTemplateSelectionModal, setShowTemplateSelectionModal] = useState(false);
+  const [selectedWorkoutType, setSelectedWorkoutType] = useState<WorkoutType | null>(null);
   const [showAddWorkoutModal, setShowAddWorkoutModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
@@ -143,9 +151,8 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
 
   // Sync workout duration to daily activity after history loads
   useEffect(() => {
-    if (Object.keys(workoutHistory).length > 0) {
-      syncWorkoutToActivity();
-    }
+    // Always sync, even if workoutHistory is empty, to clear stale data
+    syncWorkoutToActivity();
   }, [workoutHistory]);
 
   // Reload workout history when workout finishes
@@ -329,10 +336,11 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
       const history = await storage.getItem<DailyActivityHistory>(STORAGE_KEYS.DAILY_ACTIVITY);
       if (history) {
         setDailyActivityHistory(history);
-        // Immediately update today's exercise minutes
+        // Restore today's data from storage (including steps)
         const today = getTodayDate();
         const todayActivity = history[today];
         if (todayActivity) {
+          setTodaySteps(todayActivity.steps || 0);
           setTodayExerciseMinutes(todayActivity.exerciseMinutes || 0);
           setTodayCaloriesBurned(todayActivity.caloriesBurned || 0);
         }
@@ -345,48 +353,80 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
   const syncWorkoutToActivity = async () => {
     try {
       const today = getTodayDate();
-      const todayWorkouts = workoutHistory[today];
       
-      // Get current activity
+      // Get current activity history
       const activityHistory = await storage.getItem<DailyActivityHistory>(STORAGE_KEYS.DAILY_ACTIVITY) || {};
-      const todayActivity = activityHistory[today] || {
-        date: today,
-        steps: 0,
-        exerciseMinutes: 0,
-        caloriesBurned: 0,
-      };
       
-      if (todayWorkouts && todayWorkouts.length > 0) {
-        // Sum up all workouts for the day
-        let totalMinutes = 0;
-        let totalCalories = 0;
+      // Sync ALL days in workout history, not just today
+      Object.keys(workoutHistory).forEach(dateString => {
+        const dayWorkouts = workoutHistory[dateString];
         
-        todayWorkouts.forEach(workout => {
-          if (workout.duration) {
-            totalMinutes += workout.duration;
-            const caloriesPerMinute = workout.intensity !== undefined 
-              ? (3 + workout.intensity * 0.7) 
-              : 5;
-            totalCalories += Math.floor(workout.duration * caloriesPerMinute);
-          }
-        });
+        // Initialize activity for this day if it doesn't exist, preserving any existing data
+        if (!activityHistory[dateString]) {
+          activityHistory[dateString] = {
+            date: dateString,
+            steps: 0,
+            exerciseMinutes: 0,
+            caloriesBurned: 0,
+            lastUpdated: Date.now(),
+          };
+        }
         
-        // Update exercise minutes from workout duration
-        todayActivity.exerciseMinutes = totalMinutes;
-        todayActivity.caloriesBurned = totalCalories;
-      } else {
-        // No workouts for today, reset exercise minutes and calories to 0
-        todayActivity.exerciseMinutes = 0;
-        todayActivity.caloriesBurned = 0;
+        if (dayWorkouts && dayWorkouts.length > 0) {
+          // Sum up all workouts for this day
+          let totalMinutes = 0;
+          let totalCalories = 0;
+          
+          dayWorkouts.forEach(workout => {
+            if (workout.duration) {
+              totalMinutes += workout.duration;
+              const caloriesPerMinute = workout.intensity !== undefined 
+                ? (3 + workout.intensity * 0.7) 
+                : 5;
+              totalCalories += Math.floor(workout.duration * caloriesPerMinute);
+            }
+          });
+          
+          // Update exercise minutes from workout duration (preserve existing steps)
+          activityHistory[dateString].exerciseMinutes = totalMinutes;
+          activityHistory[dateString].caloriesBurned = totalCalories;
+        } else {
+          // No workouts for this day, reset exercise minutes and calories to 0 (preserve steps)
+          activityHistory[dateString].exerciseMinutes = 0;
+          activityHistory[dateString].caloriesBurned = 0;
+        }
+      });
+      
+      // Always ensure today is processed, even if there are no workouts for today
+      if (!workoutHistory[today]) {
+        // Initialize today if it doesn't exist
+        if (!activityHistory[today]) {
+          activityHistory[today] = {
+            date: today,
+            steps: 0,
+            exerciseMinutes: 0,
+            caloriesBurned: 0,
+            lastUpdated: Date.now(),
+          };
+        } else {
+          // Today exists in activity history but has no workouts - clear exercise data but preserve steps
+          activityHistory[today].exerciseMinutes = 0;
+          activityHistory[today].caloriesBurned = 0;
+          activityHistory[today].lastUpdated = Date.now();
+        }
       }
       
-      activityHistory[today] = todayActivity;
       await storage.setItem(STORAGE_KEYS.DAILY_ACTIVITY, activityHistory);
       
       // Update state
       setDailyActivityHistory({ ...activityHistory });
-      setTodayExerciseMinutes(todayActivity.exerciseMinutes);
-      setTodayCaloriesBurned(todayActivity.caloriesBurned);
+      
+      // Update today's values for the UI
+      const todayActivity = activityHistory[today];
+      if (todayActivity) {
+        setTodayExerciseMinutes(todayActivity.exerciseMinutes);
+        setTodayCaloriesBurned(todayActivity.caloriesBurned);
+      }
     } catch (error) {
       console.error('Error syncing workout to activity:', error);
     }
@@ -399,11 +439,12 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
         steps,
         exerciseMinutes,
         caloriesBurned,
+        lastUpdated: Date.now(), // Save timestamp of when this data was recorded
       };
 
       const updatedHistory = {
         ...dailyActivityHistory,
-        [date]: activityData,
+        [date]: activityData, // This REPLACES the existing data for this date
       };
 
       await storage.setItem(STORAGE_KEYS.DAILY_ACTIVITY, updatedHistory);
@@ -467,7 +508,7 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
     const newSet: WorkoutSet = {
       id: `${Date.now()}`,
       reps: parseInt(reps) || 0,
-      weight: weight ? parseFloat(weight) : undefined,
+      weight: weight ? convertWeightToStorage(parseFloat(weight), measurementSystem) : undefined,
       completed: true,
       completedAt: Date.now(),
     };
@@ -501,7 +542,8 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
     
     if (set) {
       setReps(set.reps.toString());
-      setWeight(set.weight?.toString() || '');
+      const displayWeight = convertWeightForDisplay(set.weight, measurementSystem);
+      setWeight(displayWeight !== undefined ? displayWeight.toString() : '');
       setEditingSetId(setId);
     }
   };
@@ -593,8 +635,60 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
   };
 
   const handleWorkoutTypeSelected = (type: WorkoutType) => {
-    contextStartWorkout(type);
-    onStartWorkout();
+    setSelectedWorkoutType(type);
+    setShowWorkoutTypeModal(false);
+    setShowStartOptionsModal(true);
+  };
+
+  const handleStartBlankWorkout = () => {
+    if (selectedWorkoutType) {
+      contextStartWorkout(selectedWorkoutType);
+      setShowStartOptionsModal(false);
+      setSelectedWorkoutType(null);
+      onStartWorkout();
+    }
+  };
+
+  const handleStartFromTemplate = () => {
+    setShowStartOptionsModal(false);
+    setShowTemplateSelectionModal(true);
+  };
+
+  const handleSelectTemplate = async (template: any) => {
+    try {
+      // Close ALL modals first
+      setShowTemplateSelectionModal(false);
+      setShowStartOptionsModal(false);
+      setShowWorkoutTypeModal(false);
+      setSelectedWorkoutType(null);
+      
+      // Wait for modals to close
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      await startWorkoutFromTemplate(template);
+      
+      // Wait a bit more to ensure state propagates
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      onStartWorkout();
+    } catch (error) {
+      console.error('Error selecting template:', error);
+      Alert.alert('Error', 'Failed to start workout from template');
+      setShowTemplateSelectionModal(false);
+      setShowStartOptionsModal(false);
+      setShowWorkoutTypeModal(false);
+      setSelectedWorkoutType(null);
+    }
+  };
+
+  const handleCloseStartOptions = () => {
+    setShowStartOptionsModal(false);
+    setSelectedWorkoutType(null);
+  };
+
+  const handleCloseTemplateSelection = () => {
+    setShowTemplateSelectionModal(false);
+    setShowStartOptionsModal(true);
   };
 
   const handleEditNotes = (workoutIndex: number = 0) => {
@@ -611,7 +705,9 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
     if (todayWorkouts && todayWorkouts[workoutIndex]) {
       setEditingWorkoutIndex(workoutIndex);
       setEditWorkoutTitle(todayWorkouts[workoutIndex].title || '');
-      setEditWorkoutExercises(todayWorkouts[workoutIndex].exercises);
+      // Ensure exercises defaults to empty array and has valid sets
+      const exercises = todayWorkouts[workoutIndex].exercises || [];
+      setEditWorkoutExercises(exercises);
       setEditNotesText(todayWorkouts[workoutIndex].notes || '');
       setEditingWorkout(true);
     }
@@ -919,10 +1015,6 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
     return workoutHistory[selectedDate] || []; // Return array of workouts
   };
 
-  const getHistoryDates = () => {
-    return Object.keys(workoutHistory).sort((a, b) => b.localeCompare(a));
-  };
-
   const formatDate = (dateString: string) => {
     const date = new Date(dateString + 'T00:00:00');
     return date.toLocaleDateString('en-US', { 
@@ -939,7 +1031,6 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
   };
 
   const selectedDateWorkout = getSelectedDateWorkout();
-  const historyDates = getHistoryDates();
   const isToday = selectedDate === getTodayDate();
 
   // Get activity data for the selected date
@@ -1043,32 +1134,6 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
             <Text style={styles.addButtonText}>Start Workout</Text>
           </TouchableOpacity>
         )}
-
-        {historyDates.length > 0 && (
-          <View style={styles.recentSection}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Workouts</Text>
-            {historyDates.slice(0, 3).map((date) => {
-              const workouts = workoutHistory[date];
-              if (!workouts || !Array.isArray(workouts)) return null;
-              const totalExercises = workouts.reduce((sum, w) => sum + (w.exercises?.length || 0), 0);
-              return (
-                <WorkoutHistoryCard
-                  key={date}
-                  date={date}
-                  formattedDate={formatDate(date)}
-                  workoutCount={workouts.length}
-                  workoutTitle={workouts.length === 1 ? workouts[0].title : undefined}
-                  totalExercises={totalExercises}
-                  theme={theme}
-                  onPress={() => {
-                    setSelectedDate(date);
-                    setShowHistoryModal(false);
-                  }}
-                />
-              );
-            })}
-          </View>
-        )}
       </ScrollView>
 
       {/* Workout Type Selection Modal */}
@@ -1076,6 +1141,23 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
         visible={showWorkoutTypeModal}
         onClose={() => setShowWorkoutTypeModal(false)}
         onSelectType={handleWorkoutTypeSelected}
+      />
+
+      {/* Workout Start Options Modal */}
+      <WorkoutStartOptionsModal
+        visible={showStartOptionsModal}
+        workoutType={selectedWorkoutType}
+        onClose={handleCloseStartOptions}
+        onStartBlank={handleStartBlankWorkout}
+        onStartFromTemplate={handleStartFromTemplate}
+      />
+
+      {/* Template Selection Modal */}
+      <TemplateSelectionModal
+        visible={showTemplateSelectionModal}
+        workoutType={selectedWorkoutType}
+        onClose={handleCloseTemplateSelection}
+        onSelectTemplate={handleSelectTemplate}
       />
 
       {/* Edit Notes Modal */}
@@ -1322,14 +1404,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 15,
     fontWeight: '600',
-  },
-  recentSection: {
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
   },
 
 

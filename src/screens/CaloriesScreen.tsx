@@ -8,14 +8,21 @@ import {
   Modal,
   TextInput,
   ScrollView,
-      KeyboardAvoidingView,
+  KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { CircularProgress } from '../components/CircularProgress';
 import { storage, STORAGE_KEYS } from '../utils/storage';
+// Barcode scanner temporarily disabled for Expo Go compatibility
+// import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
+// import { ProductDetailsModal } from '../components/ProductDetailsModal';
+// import { fetchProductByBarcode } from '../utils/foodApi';
+// import { ScannedProduct, CachedProduct } from '../types';
 
 interface CaloriesScreenProps {
   onOpenSettings: () => void;
@@ -23,12 +30,14 @@ interface CaloriesScreenProps {
 
 interface FoodEntry {
   id: string;
+  name?: string;
   protein: number;
   carbs: number;
   fats: number;
   calories: number;
   timestamp: Date;
   date: string;
+  barcode?: string;
 }
 
 interface DailyCaloriesData {
@@ -150,6 +159,12 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  // Barcode scanner state temporarily disabled
+  // const [showScannerModal, setShowScannerModal] = useState(false);
+  // const [showProductModal, setShowProductModal] = useState(false);
+  // const [scannedProduct, setScannedProduct] = useState<ScannedProduct | null>(null);
+  // const [isLoadingProduct, setIsLoadingProduct] = useState(false);
+  // const [productCache, setProductCache] = useState<Record<string, CachedProduct>>({});
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fats, setFats] = useState('');
@@ -228,6 +243,7 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
   useEffect(() => {
     loadAllData();
     loadGoals();
+    // loadProductCache(); // Disabled for Expo Go
   }, []);
 
   // Load entries when selected date changes
@@ -241,6 +257,99 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
       saveEntries();
     }
   }, [entries]);
+
+  // Barcode scanner functions temporarily disabled for Expo Go
+  /*
+  const loadProductCache = async () => {
+    try {
+      const cache = await storage.getItem<Record<string, CachedProduct>>(STORAGE_KEYS.PRODUCT_CACHE);
+      if (cache) {
+        setProductCache(cache);
+      }
+    } catch (error) {
+      console.error('Error loading product cache:', error);
+    }
+  };
+
+  const saveToCache = async (product: ScannedProduct) => {
+    try {
+      const cachedProduct: CachedProduct = {
+        ...product,
+        cachedAt: Date.now(),
+        lastUsed: Date.now(),
+      };
+      const updatedCache = {
+        ...productCache,
+        [product.barcode]: cachedProduct,
+      };
+      await storage.setItem(STORAGE_KEYS.PRODUCT_CACHE, updatedCache);
+      setProductCache(updatedCache);
+    } catch (error) {
+      console.error('Error saving to cache:', error);
+    }
+  };
+
+  const handleBarcodeScan = async (barcode: string) => {
+    setIsLoadingProduct(true);
+    setShowScannerModal(false);
+
+    try {
+      if (productCache[barcode]) {
+        const cached = productCache[barcode];
+        cached.lastUsed = Date.now();
+        await storage.setItem(STORAGE_KEYS.PRODUCT_CACHE, { ...productCache, [barcode]: cached });
+        setScannedProduct(cached);
+        setShowProductModal(true);
+      } else {
+        const product = await fetchProductByBarcode(barcode);
+        
+        if (product) {
+          await saveToCache(product);
+          setScannedProduct(product);
+          setShowProductModal(true);
+        } else {
+          Alert.alert(
+            'Product Not Found',
+            'Could not find this product in the database. Please enter macros manually.',
+            [{ text: 'OK' }]
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching product:', error);
+      Alert.alert(
+        'Error',
+        'Failed to fetch product information. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsLoadingProduct(false);
+    }
+  };
+
+  const handleAddScannedProduct = (
+    calories: number,
+    protein: number,
+    carbs: number,
+    fat: number,
+    name: string,
+    barcode: string
+  ) => {
+    const now = new Date();
+    const newEntry: FoodEntry = {
+      id: Date.now().toString(),
+      name,
+      protein,
+      carbs,
+      fats: fat,
+      calories,
+      timestamp: now,
+      date: selectedDate,
+      barcode,
+    };
+    setEntries(prev => [...prev, newEntry]);
+  };
+  */
 
   const totalCalories = entries.reduce((sum, entry) => sum + entry.calories, 0);
   const goalCalories = goals.calories;
@@ -622,6 +731,25 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
           </View>
         </View>
       </Modal>
+
+      {/* Barcode Scanner Modals - Temporarily disabled for Expo Go */}
+      {/* 
+      <BarcodeScannerModal
+        visible={showScannerModal}
+        onClose={() => setShowScannerModal(false)}
+        onScan={handleBarcodeScan}
+      />
+
+      <ProductDetailsModal
+        visible={showProductModal}
+        product={scannedProduct}
+        onClose={() => {
+          setShowProductModal(false);
+          setScannedProduct(null);
+        }}
+        onAdd={handleAddScannedProduct}
+      />
+      */}
       </SafeAreaView>
     </View>
   );
@@ -712,6 +840,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  // Scan button styles temporarily disabled
+  /*
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  scanButton: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  scanButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  */
   entriesContainer: {
     gap: 12,
   },
@@ -735,6 +886,18 @@ const styles = StyleSheet.create({
   entryTime: {
     fontSize: 12,
   },
+  // Entry header and name styles temporarily disabled
+  /*
+  entryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  entryName: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  */
   entryMacros: {
     flexDirection: 'row',
     gap: 12,

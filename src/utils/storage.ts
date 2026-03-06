@@ -13,6 +13,10 @@ export const STORAGE_KEYS = {
   WORKOUT_GOALS: '@gymapp_workout_goals',
   STEP_OFFSET: '@gymapp_step_offset',
   STEP_MULTIPLIER: '@gymapp_step_multiplier',
+  MEASUREMENT_SYSTEM: '@gymapp_measurement_system',
+  WORKOUT_TEMPLATES: '@gymapp_workout_templates',
+  PROMPT_SAVE_TEMPLATE: '@gymapp_prompt_save_template',
+  PRODUCT_CACHE: '@gymapp_product_cache',
 } as const;
 
 // Generic storage functions

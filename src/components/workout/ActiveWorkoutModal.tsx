@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
+import { useMeasurementSystem } from '../../hooks/useMeasurementSystem';
+import { formatWeight, getWeightLabel, convertWeightToStorage } from '../../utils/measurements';
 
 interface WorkoutSet {
   id: string;
@@ -64,6 +66,7 @@ interface ActiveWorkoutModalProps {
     surface: string;
     border: string;
     textSecondary: string;
+    textTertiary: string;
     primary: string;
     error: string;
   };
@@ -99,6 +102,8 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
   onCancelEdit,
   theme,
 }) => {
+  const { measurementSystem } = useMeasurementSystem();
+
   return (
     <>
       <Modal
@@ -159,7 +164,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                               </Text>
                               {(exercise.previousWeight || exercise.previousReps) && (
                                 <Text style={[styles.previousStats, { color: theme.textSecondary }]}>
-                                  Last: {exercise.previousWeight ? `${exercise.previousWeight}lbs` : ''} {exercise.previousReps ? `× ${exercise.previousReps}` : ''}
+                                  Last: {exercise.previousWeight ? formatWeight(exercise.previousWeight, measurementSystem, 1) : ''} {exercise.previousReps ? `× ${exercise.previousReps}` : ''}
                                 </Text>
                               )}
                             </View>
@@ -187,7 +192,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                                     Set {setIndex + 1}
                                   </Text>
                                   <Text style={[styles.setDetailText, { color: theme.text }]}>
-                                    {set.reps} reps{set.weight ? ` × ${set.weight}lbs` : ''}
+                                    {set.reps} reps{set.weight ? ` × ${formatWeight(set.weight, measurementSystem, 1)}` : ''}
                                   </Text>
                                   <View style={styles.setActions}>
                                     <TouchableOpacity onPress={() => onEditSet(exercise.id, set.id)}>
@@ -214,18 +219,18 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                                   <TextInput
                                     style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
                                     placeholder="10"
-                                    placeholderTextColor={theme.textSecondary}
+                                    placeholderTextColor={theme.textTertiary}
                                     keyboardType="number-pad"
                                     value={reps}
                                     onChangeText={onRepsChange}
                                   />
                                 </View>
                                 <View style={styles.inputColumn}>
-                                  <Text style={[styles.inputLabel, { color: theme.text }]}>Weight (lbs)</Text>
+                                  <Text style={[styles.inputLabel, { color: theme.text }]}>{getWeightLabel(measurementSystem, false)}</Text>
                                   <TextInput
                                     style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                                    placeholder="135"
-                                    placeholderTextColor={theme.textSecondary}
+                                    placeholder={measurementSystem === 'metric' ? '60' : '135'}
+                                    placeholderTextColor={theme.textTertiary}
                                     keyboardType="numeric"
                                     value={weight}
                                     onChangeText={onWeightChange}
@@ -275,7 +280,7 @@ export const ActiveWorkoutModal: React.FC<ActiveWorkoutModalProps> = ({
                                     style={[styles.logSetButton, { flex: 1, backgroundColor: theme.primary }]}
                                     onPress={() => {
                                       if (reps) {
-                                        onUpdateSet(exercise.id, editingSetId, parseInt(reps), weight ? parseFloat(weight) : undefined);
+                                        onUpdateSet(exercise.id, editingSetId, parseInt(reps), weight ? convertWeightToStorage(parseFloat(weight), measurementSystem) : undefined);
                                       }
                                     }}
                                   >
