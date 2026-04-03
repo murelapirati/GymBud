@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   SafeAreaView,
   Modal,
   TextInput,
@@ -12,17 +13,19 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { CircularProgress } from '../components/CircularProgress';
 import { storage, STORAGE_KEYS } from '../utils/storage';
-// Barcode scanner temporarily disabled for Expo Go compatibility
-// import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
-// import { ProductDetailsModal } from '../components/ProductDetailsModal';
-// import { fetchProductByBarcode } from '../utils/foodApi';
-// import { ScannedProduct, CachedProduct } from '../types';
+import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
+import { ProductDetailsModal } from '../components/ProductDetailsModal';
+import { RecipeLogModal } from '../components/RecipeLogModal';
+import { fetchProductByBarcode } from '../utils/foodApi';
+import { ScannedProduct, CachedProduct } from '../types';
+import type { Recipe } from '../types';
 
 interface CaloriesScreenProps {
   onOpenSettings: () => void;
@@ -31,12 +34,15 @@ interface CaloriesScreenProps {
 interface FoodEntry {
   id: string;
   name?: string;
+  servingAmount?: string;
+  imageUrl?: string;
   protein: number;
   carbs: number;
   fats: number;
   calories: number;
   timestamp: Date;
   date: string;
+  recipeId?: string;
   barcode?: string;
 }
 
@@ -159,12 +165,18 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  // Barcode scanner state temporarily disabled
-  // const [showScannerModal, setShowScannerModal] = useState(false);
-  // const [showProductModal, setShowProductModal] = useState(false);
-  // const [scannedProduct, setScannedProduct] = useState<ScannedProduct | null>(null);
-  // const [isLoadingProduct, setIsLoadingProduct] = useState(false);
-  // const [productCache, setProductCache] = useState<Record<string, CachedProduct>>({});
+  const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [showScannerModal, setShowScannerModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [showRecipeSelectModal, setShowRecipeSelectModal] = useState(false);
+  const [showRecipeLogModal, setShowRecipeLogModal] = useState(false);
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
+  const [scannedProduct, setScannedProduct] = useState<ScannedProduct | null>(null);
+  const [isLoadingProduct, setIsLoadingProduct] = useState(false);
+  const [productCache, setProductCache] = useState<Record<string, CachedProduct>>({});
+  const isAlertShowing = useRef(false);
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fats, setFats] = useState('');
@@ -243,6 +255,7 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
   useEffect(() => {
     loadAllData();
     loadGoals();
+    loadRecipes();
     // loadProductCache(); // Disabled for Expo Go
   }, []);
 
@@ -258,8 +271,6 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
     }
   }, [entries]);
 
-  // Barcode scanner functions temporarily disabled for Expo Go
-  /*
   const loadProductCache = async () => {
     try {
       const cache = await storage.getItem<Record<string, CachedProduct>>(STORAGE_KEYS.PRODUCT_CACHE);
@@ -307,34 +318,38 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
           await saveToCache(product);
           setScannedProduct(product);
           setShowProductModal(true);
-        } else {
+        } else if (!isAlertShowing.current) {
+          isAlertShowing.current = true;
           Alert.alert(
             'Product Not Found',
             'Could not find this product in the database. Please enter macros manually.',
-            [{ text: 'OK' }]
+            [{ text: 'OK', onPress: () => { isAlertShowing.current = false; } }]
           );
         }
       }
     } catch (error) {
       console.error('Error fetching product:', error);
-      Alert.alert(
-        'Error',
-        'Failed to fetch product information. Please try again.',
-        [{ text: 'OK' }]
-      );
+      if (!isAlertShowing.current) {
+        isAlertShowing.current = true;
+        Alert.alert(
+          'Error',
+          'Failed to fetch product information. Please try again.',
+          [{ text: 'OK', onPress: () => { isAlertShowing.current = false; } }]
+        );
+      }
     } finally {
       setIsLoadingProduct(false);
     }
   };
 
-  const handleAddScannedProduct = (
-    calories: number,
-    protein: number,
-    carbs: number,
-    fat: number,
-    name: string,
-    barcode: string
-  ) => {
+  const loadRecipes = async () => {
+    try {
+      const saved = await storage.getItem<Recipe[]>(STORAGE_KEYS.RECIPES) || [];
+      setSavedRecipes(saved);
+    } catch (e) { /* ignore */ }
+  };
+
+  const handleLogRecipe = (calories: number, protein: number, carbs: number, fat: number, name: string) => {
     const now = new Date();
     const newEntry: FoodEntry = {
       id: Date.now().toString(),
@@ -345,11 +360,39 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
       calories,
       timestamp: now,
       date: selectedDate,
+      recipeId: selectedRecipe?.id,
+    };
+    setEntries(prev => [...prev, newEntry]);
+    setShowRecipeLogModal(false);
+    setSelectedRecipe(null);
+  };
+
+  const handleAddScannedProduct = (
+    calories: number,
+    protein: number,
+    carbs: number,
+    fat: number,
+    name: string,
+    barcode: string,
+    servingAmount: string,
+    imageUrl?: string
+  ) => {
+    const now = new Date();
+    const newEntry: FoodEntry = {
+      id: Date.now().toString(),
+      name,
+      servingAmount,
+      imageUrl,
+      protein,
+      carbs,
+      fats: fat,
+      calories,
+      timestamp: now,
+      date: selectedDate,
       barcode,
     };
     setEntries(prev => [...prev, newEntry]);
   };
-  */
 
   const totalCalories = entries.reduce((sum, entry) => sum + entry.calories, 0);
   const goalCalories = goals.calories;
@@ -368,22 +411,41 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
     const f = parseFloat(fats || '0');
     if (!isNaN(p) && !isNaN(c) && !isNaN(f)) {
       const calories = Math.round(p * 4 + c * 4 + f * 9);
-      const now = new Date();
-      const newEntry: FoodEntry = {
-        id: Date.now().toString(),
-        protein: p,
-        carbs: c,
-        fats: f,
-        calories,
-        timestamp: now,
-        date: selectedDate,
-      };
-      setEntries(prev => [...prev, newEntry]);
+      if (editingEntry) {
+        setEntries(prev => prev.map(e =>
+          e.id === editingEntry.id
+            ? { ...e, protein: p, carbs: c, fats: f, calories, name: editingName.trim() || undefined }
+            : e
+        ));
+      } else {
+        const now = new Date();
+        const newEntry: FoodEntry = {
+          id: Date.now().toString(),
+          protein: p,
+          carbs: c,
+          fats: f,
+          calories,
+          timestamp: now,
+          date: selectedDate,
+        };
+        setEntries(prev => [...prev, newEntry]);
+      }
       setProtein('');
       setCarbs('');
       setFats('');
+      setEditingEntry(null);
+      setEditingName('');
       setShowAddModal(false);
     }
+  };
+
+  const handleEditEntry = (entry: FoodEntry) => {
+    setEditingEntry(entry);
+    setEditingName(entry.name || '');
+    setProtein(entry.protein.toString());
+    setCarbs(entry.carbs.toString());
+    setFats(entry.fats.toString());
+    setShowAddModal(true);
   };
 
   const handleDeleteEntry = (entryId: string) => {
@@ -508,23 +570,57 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
           </View>
         </View>
 
-        <TouchableOpacity 
-          style={[styles.addButton, { backgroundColor: theme.primary }]}
-          onPress={() => setShowAddModal(true)}
-        >
-          <Ionicons name="add-circle-outline" size={22} color="white" />
-          <Text style={styles.addButtonText}>Add Food</Text>
-        </TouchableOpacity>
+        <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            style={[styles.addButton, { backgroundColor: theme.primary }]}
+            onPress={() => setShowAddModal(true)}
+          >
+            <Ionicons name="add-circle-outline" size={22} color="white" />
+            <Text style={styles.addButtonText}>Add Food</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.recipesButton, { backgroundColor: theme.primary }]}
+            onPress={() => { loadRecipes(); setShowRecipeSelectModal(true); }}
+          >
+            <Ionicons name="restaurant-outline" size={22} color="white" />
+            <Text style={styles.addButtonText}>Recipes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.scanButton, { backgroundColor: theme.primary }]}
+            onPress={() => setShowScannerModal(true)}
+          >
+            <Ionicons name="barcode-outline" size={22} color="white" />
+            <Text style={styles.scanButtonText}>Scan</Text>
+          </TouchableOpacity>
+        </View>
 
         {entries.length > 0 && (
           <View style={styles.entriesContainer}>
             <Text style={[styles.entriesTitle, { color: theme.text }]}>Entries</Text>
             {entries.slice().reverse().map((entry) => (
-              <View key={entry.id} style={[styles.entryCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <TouchableOpacity
+                key={entry.id}
+                style={[styles.entryCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+                onPress={() => handleEditEntry(entry)}
+                activeOpacity={0.7}
+              >
+                {entry.imageUrl && (
+                  <Image
+                    source={{ uri: entry.imageUrl }}
+                    style={styles.entryImage}
+                    resizeMode="contain"
+                    onError={() => {}}
+                  />
+                )}
                 <View style={styles.entryLeft}>
                   <Text style={[styles.entryTime, { color: theme.textSecondary }]}>
                     {formatTime(entry.timestamp)}
                   </Text>
+                  {entry.name && (
+                    <Text style={[styles.entryName, { color: theme.text }]} numberOfLines={1}>
+                      {entry.name}{entry.servingAmount ? ` · ${entry.servingAmount}` : ''}
+                    </Text>
+                  )}
                   <View style={styles.entryMacros}>
                     <Text style={[styles.entryMacroText, { color: '#FF3B3B' }]}>P: {entry.protein}g</Text>
                     <Text style={[styles.entryMacroText, { color: '#ffee03' }]}>C: {entry.carbs}g</Text>
@@ -540,7 +636,7 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
                 >
                   <Ionicons name="trash-outline" size={20} color={theme.error} />
                 </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -550,12 +646,12 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
         visible={showAddModal}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setShowAddModal(false)}
+        onRequestClose={() => { setShowAddModal(false); setEditingEntry(null); setEditingName(''); setProtein(''); setCarbs(''); setFats(''); }}
       >
         <TouchableOpacity 
           activeOpacity={1} 
           style={styles.modalOverlay}
-          onPress={() => setShowAddModal(false)}
+          onPress={() => { setShowAddModal(false); setEditingEntry(null); setEditingName(''); setProtein(''); setCarbs(''); setFats(''); }}
         >
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -564,13 +660,27 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
               <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
                 <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: theme.text }]}>Add Food</Text>
-                  <TouchableOpacity onPress={() => setShowAddModal(false)}>
+                  <Text style={[styles.modalTitle, { color: theme.text }]}>
+                    {editingEntry ? 'Edit Entry' : 'Add Food'}
+                  </Text>
+                  <TouchableOpacity onPress={() => { setShowAddModal(false); setEditingEntry(null); setEditingName(''); setProtein(''); setCarbs(''); setFats(''); }}>
                     <Ionicons name="close" size={28} color={theme.text} />
                   </TouchableOpacity>
                 </View>
 
                 <ScrollView contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
+                  {editingEntry && (
+                    <View style={styles.inputGroup}>
+                      <Text style={[styles.inputLabel, { color: theme.text }]}>Name</Text>
+                      <TextInput
+                        style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                        placeholder={editingEntry.name || 'Entry name'}
+                        placeholderTextColor={theme.textSecondary}
+                        value={editingName}
+                        onChangeText={setEditingName}
+                      />
+                    </View>
+                  )}
                   <View style={styles.inputGroup}>
                     <Text style={[styles.inputLabel, { color: theme.text }]}>Protein (grams)</Text>
                     <TextInput
@@ -611,7 +721,7 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
                     style={[styles.submitButton, { backgroundColor: theme.primary }]}
                     onPress={handleAddFood}
                   >
-                    <Text style={styles.submitButtonText}>Add</Text>
+                    <Text style={styles.submitButtonText}>{editingEntry ? 'Save' : 'Add'}</Text>
                   </TouchableOpacity>
                 </ScrollView>
               </View>
@@ -732,8 +842,6 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
         </View>
       </Modal>
 
-      {/* Barcode Scanner Modals - Temporarily disabled for Expo Go */}
-      {/* 
       <BarcodeScannerModal
         visible={showScannerModal}
         onClose={() => setShowScannerModal(false)}
@@ -749,7 +857,69 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
         }}
         onAdd={handleAddScannedProduct}
       />
-      */}
+
+      {/* Recipe Select Modal */}
+      <Modal
+        visible={showRecipeSelectModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowRecipeSelectModal(false)}
+      >
+        <View style={styles.recipeSelectOverlay}>
+          <Pressable style={styles.recipeSelectBackdrop} onPress={() => setShowRecipeSelectModal(false)} />
+          <View style={[styles.recipeSelectSheet, { backgroundColor: theme.card }]}>
+            <View style={styles.recipeSelectHeader}>
+              <Text style={[styles.recipeSelectTitle, { color: theme.text }]}>Log a Recipe</Text>
+              <TouchableOpacity onPress={() => setShowRecipeSelectModal(false)}>
+                <Ionicons name="close" size={26} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            {savedRecipes.length === 0 ? (
+              <View style={styles.recipeSelectEmpty}>
+                <Ionicons name="restaurant-outline" size={48} color={theme.textSecondary} />
+                <Text style={[styles.recipeSelectEmptyText, { color: theme.textSecondary }]}>No recipes yet.</Text>
+                <Text style={[styles.recipeSelectEmptySubtext, { color: theme.textTertiary }]}>Create one in the Library tab.</Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 400 }}>
+                {savedRecipes.map(recipe => (
+                  <TouchableOpacity
+                    key={recipe.id}
+                    style={[styles.recipeSelectItem, { borderBottomColor: theme.border }]}
+                    onPress={() => {
+                      setSelectedRecipe(recipe);
+                      setShowRecipeSelectModal(false);
+                      setShowRecipeLogModal(true);
+                    }}
+                  >
+                    {recipe.imageUri ? (
+                      <Image source={{ uri: recipe.imageUri }} style={styles.recipeSelectImage} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.recipeSelectImagePlaceholder, { backgroundColor: theme.surface }]}>
+                        <Ionicons name="restaurant-outline" size={22} color={theme.textSecondary} />
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.recipeSelectName, { color: theme.text }]} numberOfLines={1}>{recipe.name}</Text>
+                      <Text style={[styles.recipeSelectMeta, { color: theme.textSecondary }]}>
+                        {recipe.totalCalories} kcal · {recipe.servings} serving{recipe.servings !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <RecipeLogModal
+        visible={showRecipeLogModal}
+        recipe={selectedRecipe}
+        onClose={() => { setShowRecipeLogModal(false); setSelectedRecipe(null); }}
+        onLog={handleLogRecipe}
+      />
       </SafeAreaView>
     </View>
   );
@@ -826,6 +996,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   addButton: {
+    flex: 1,
     flexDirection: 'row',
     paddingVertical: 12,
     paddingHorizontal: 20,
@@ -833,19 +1004,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 24,
   },
   addButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
   },
-  // Scan button styles temporarily disabled
-  /*
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
     marginBottom: 24,
+  },
+  recipesButton: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   scanButton: {
     flex: 1,
@@ -862,7 +1040,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  */
   entriesContainer: {
     gap: 12,
   },
@@ -878,6 +1055,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
+  },
+  entryImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    flexShrink: 0,
   },
   entryLeft: {
     flex: 1,
@@ -886,18 +1070,12 @@ const styles = StyleSheet.create({
   entryTime: {
     fontSize: 12,
   },
-  // Entry header and name styles temporarily disabled
-  /*
-  entryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   entryName: {
     fontSize: 14,
     fontWeight: '600',
     marginTop: 2,
+    marginBottom: 2,
   },
-  */
   entryMacros: {
     flexDirection: 'row',
     gap: 12,
@@ -1055,5 +1233,70 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 2.5,
     opacity: 0.3,
+  },
+  recipeSelectOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  recipeSelectBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  recipeSelectSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 8,
+    paddingBottom: 32,
+  },
+  recipeSelectHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  recipeSelectTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  recipeSelectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  recipeSelectImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+  },
+  recipeSelectImagePlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recipeSelectName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  recipeSelectMeta: {
+    fontSize: 13,
+  },
+  recipeSelectEmpty: {
+    alignItems: 'center',
+    padding: 40,
+    gap: 8,
+  },
+  recipeSelectEmptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  recipeSelectEmptySubtext: {
+    fontSize: 14,
   },
 });

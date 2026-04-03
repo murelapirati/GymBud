@@ -408,25 +408,6 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
   const workoutTypeInfo = getWorkoutTypeInfo();
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Debug: Test button to see if touches work at all */}
-      <TouchableOpacity 
-        onPress={() => {
-          console.log('DEBUG: Touch detected!');
-          Alert.alert('Touch Works', 'Touches are registering');
-        }}
-        style={{
-          position: 'absolute',
-          top: 100,
-          right: 10,
-          backgroundColor: 'red',
-          padding: 10,
-          zIndex: 9999,
-          elevation: 9999,
-        }}
-      >
-        <Text style={{ color: 'white', fontWeight: 'bold' }}>TEST</Text>
-      </TouchableOpacity>
-      
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>

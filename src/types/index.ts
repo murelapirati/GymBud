@@ -16,8 +16,10 @@ export interface ScannedProduct {
   barcode: string;
   name: string;
   brand?: string;
-  servingSize: number; // in grams
+  servingSize: number; // in grams or ml
   servingSizeUnit: string; // 'g', 'ml', etc.
+  totalSize?: number; // total product quantity (e.g., 500 for a 500ml bottle)
+  totalSizeUnit?: string; // unit of totalSize
   nutriments: {
     energyKcal: number; // calories per 100g
     proteins: number; // grams per 100g
@@ -40,16 +42,33 @@ export interface DailyCalories {
   targetCalories?: number;
 }
 
+export interface RecipeIngredient {
+  id: string;
+  name: string;
+  amount: number;   // weight/volume used in this recipe
+  unit: string;     // 'g' or 'ml'
+  calories: number; // calculated for this amount
+  protein: number;
+  carbs: number;
+  fat: number;
+  imageUrl?: string;
+  barcode?: string;
+}
+
 export interface Recipe {
   id: string;
   name: string;
-  calories: number;
-  protein?: number;
-  carbs?: number;
-  fat?: number;
-  ingredients?: string[];
-  instructions?: string;
+  servings: number;         // how many portions this recipe makes
+  totalWeightG?: number;    // optional: total finished dish weight in grams
+  ingredients: RecipeIngredient[];
+  totalCalories: number;
+  totalProtein: number;
+  totalCarbs: number;
+  totalFat: number;
+  imageUri?: string;        // local device URI from camera / gallery
+  notes?: string;
   createdAt: number;
+  updatedAt: number;
 }
 
 // Workout tracking types

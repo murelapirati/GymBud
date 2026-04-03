@@ -10,11 +10,13 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { storage, STORAGE_KEYS } from '../utils/storage';
-import type { WorkoutTemplate, WorkoutType, TemplateExercise } from '../types';
+import type { WorkoutTemplate, WorkoutType, TemplateExercise, Recipe } from '../types';
+import RecipeEditScreen from './RecipeEditScreen';
 
 type TabType = 'templates' | 'recipes';
 
@@ -26,6 +28,9 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   const { theme } = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('recipes');
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [showRecipeEdit, setShowRecipeEdit] = useState(false);
+  const [editingRecipe, setEditingRecipe] = useState<Recipe | undefined>(undefined);
   
   // Workout builder state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -52,7 +57,49 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
 
   useEffect(() => {
     loadTemplates();
+    loadRecipes();
   }, []);
+
+  const loadRecipes = async () => {
+    try {
+      const saved = await storage.getItem<Recipe[]>(STORAGE_KEYS.RECIPES) || [];
+      setRecipes(saved);
+    } catch (error) {
+      console.error('Error loading recipes:', error);
+    }
+  };
+
+  const handleSaveRecipe = async (recipe: Recipe) => {
+    try {
+      const updated = editingRecipe
+        ? recipes.map(r => r.id === recipe.id ? recipe : r)
+        : [...recipes, recipe];
+      await storage.setItem(STORAGE_KEYS.RECIPES, updated);
+      setRecipes(updated);
+      setShowRecipeEdit(false);
+      setEditingRecipe(undefined);
+    } catch (error) {
+      console.error('Error saving recipe:', error);
+      Alert.alert('Error', 'Failed to save recipe.');
+    }
+  };
+
+  const handleDeleteRecipe = (recipeId: string) => {
+    Alert.alert('Delete Recipe', 'Are you sure you want to delete this recipe?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            const updated = recipes.filter(r => r.id !== recipeId);
+            await storage.setItem(STORAGE_KEYS.RECIPES, updated);
+            setRecipes(updated);
+          } catch (error) {
+            console.error('Error deleting recipe:', error);
+          }
+        },
+      },
+    ]);
+  };
 
   const loadTemplates = async () => {
     try {
@@ -269,6 +316,16 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
     }, 300);
   };
 
+  if (showRecipeEdit) {
+    return (
+      <RecipeEditScreen
+        recipe={editingRecipe}
+        onBack={() => { setShowRecipeEdit(false); setEditingRecipe(undefined); }}
+        onSave={handleSaveRecipe}
+      />
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
@@ -325,13 +382,60 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
       {/* Content */}
       <ScrollView style={styles.content}>
         {activeTab === 'recipes' ? (
-          <View style={[styles.emptyState, { backgroundColor: theme.card }]}>
-            <Ionicons name="restaurant-outline" size={64} color={theme.textSecondary} />
-            <Text style={[styles.emptyTitle, { color: theme.text }]}>Coming Soon</Text>
-            <Text style={[styles.emptyDescription, { color: theme.textSecondary }]}>
-              Recipe management will be available in a future update.
-            </Text>
-          </View>
+          recipes.length === 0 ? (
+            <View style={[styles.emptyState, { backgroundColor: theme.card }]}>
+              <Ionicons name="restaurant-outline" size={64} color={theme.textSecondary} />
+              <Text style={[styles.emptyTitle, { color: theme.text }]}>No Recipes Yet</Text>
+              <Text style={[styles.emptyDescription, { color: theme.textSecondary }]}>
+                Create a recipe by tapping the + button below.
+              </Text>
+              <TouchableOpacity
+                style={[styles.createButton, { backgroundColor: theme.primary }]}
+                onPress={() => { setEditingRecipe(undefined); setShowRecipeEdit(true); }}
+              >
+                <Ionicons name="add" size={24} color="#FFFFFF" />
+                <Text style={styles.createButtonText}>New Recipe</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ paddingBottom: 80 }}>
+              {recipes.map(recipe => (
+                <TouchableOpacity
+                  key={recipe.id}
+                  style={[styles.recipeCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+                  onPress={() => { setEditingRecipe(recipe); setShowRecipeEdit(true); }}
+                >
+                  {recipe.imageUri ? (
+                    <Image
+                      source={{ uri: recipe.imageUri }}
+                      style={styles.recipeCardImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[styles.recipeCardImagePlaceholder, { backgroundColor: theme.surface }]}>
+                      <Ionicons name="restaurant-outline" size={28} color={theme.textSecondary} />
+                    </View>
+                  )}
+                  <View style={styles.recipeCardInfo}>
+                    <Text style={[styles.recipeCardName, { color: theme.text }]} numberOfLines={1}>{recipe.name}</Text>
+                    <Text style={[styles.recipeCardMeta, { color: theme.textSecondary }]}>
+                      {recipe.ingredients.length} ingredient{recipe.ingredients.length !== 1 ? 's' : ''} · {recipe.servings} serving{recipe.servings !== 1 ? 's' : ''}
+                    </Text>
+                    <Text style={[styles.recipeCardMacros, { color: theme.primary }]}>
+                      {recipe.totalCalories} kcal total · {Math.round(recipe.totalCalories / recipe.servings)} kcal/serving
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteRecipe(recipe.id)}
+                    style={styles.recipeDeleteBtn}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={20} color={theme.error} />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )
         ) : (
           <>
             {templates.length === 0 ? (
@@ -447,11 +551,19 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
         )}
       </ScrollView>
 
-      {/* Floating Create Button (when templates exist and in templates tab) */}
+      {/* Floating Create Button */}
       {activeTab === 'templates' && templates.length > 0 && (
         <TouchableOpacity
           style={[styles.floatingButton, { backgroundColor: theme.primary }]}
           onPress={startCreateWorkout}
+        >
+          <Ionicons name="add" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+      {activeTab === 'recipes' && recipes.length > 0 && (
+        <TouchableOpacity
+          style={[styles.floatingButton, { backgroundColor: theme.primary }]}
+          onPress={() => { setEditingRecipe(undefined); setShowRecipeEdit(true); }}
         >
           <Ionicons name="add" size={28} color="#FFFFFF" />
         </TouchableOpacity>
@@ -823,6 +935,43 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
+  },
+  recipeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  recipeCardImage: {
+    width: 80,
+    height: 80,
+  },
+  recipeCardImagePlaceholder: {
+    width: 80,
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recipeCardInfo: {
+    flex: 1,
+    padding: 12,
+    gap: 3,
+  },
+  recipeCardName: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  recipeCardMeta: {
+    fontSize: 12,
+  },
+  recipeCardMacros: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  recipeDeleteBtn: {
+    padding: 12,
   },
   modalOverlay: {
     flex: 1,

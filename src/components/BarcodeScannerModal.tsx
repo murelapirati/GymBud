@@ -9,7 +9,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
@@ -25,30 +25,24 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   onScan,
 }) => {
   const { theme } = useTheme();
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const getBarCodeScannerPermissions = async () => {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setHasPermission(status === 'granted');
-    };
-
     if (visible) {
-      getBarCodeScannerPermissions();
+      requestPermission();
       setScanned(false);
     }
   }, [visible]);
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+  const handleBarCodeScanned = ({ data }: { type: string; data: string }) => {
     if (scanned || isLoading) return;
     
     setScanned(true);
     setIsLoading(true);
     onScan(data);
     
-    // Reset after a delay to allow scanning again if needed
     setTimeout(() => {
       setIsLoading(false);
     }, 1000);
@@ -62,7 +56,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
   if (!visible) return null;
 
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <Modal visible={visible} transparent animationType="slide">
         <View style={styles.permissionContainer}>
@@ -75,12 +69,12 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     );
   }
 
-  if (hasPermission === false) {
+  if (!permission.granted) {
     return (
       <Modal visible={visible} transparent animationType="slide">
         <View style={styles.permissionContainer}>
           <View style={[styles.permissionCard, { backgroundColor: theme.card }]}>
-            <Ionicons name="camera-off" size={64} color={theme.error} />
+            <Ionicons name="camera-outline" size={64} color={theme.error} />
             <Text style={[styles.permissionTitle, { color: theme.text }]}>
               Camera Permission Required
             </Text>
@@ -89,9 +83,15 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </Text>
             <TouchableOpacity
               style={[styles.permissionButton, { backgroundColor: theme.primary }]}
+              onPress={requestPermission}
+            >
+              <Text style={styles.permissionButtonText}>Grant Permission</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.permissionButton, { backgroundColor: theme.card, marginTop: 8 }]}
               onPress={handleClose}
             >
-              <Text style={styles.permissionButtonText}>Close</Text>
+              <Text style={[styles.permissionButtonText, { color: theme.text }]}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -102,8 +102,9 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   return (
     <Modal visible={visible} transparent={false} animationType="slide">
       <View style={styles.container}>
-        <BarCodeScanner
-          onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+        <CameraView
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr', 'code128', 'code39'] }}
           style={StyleSheet.absoluteFillObject}
         />
         
