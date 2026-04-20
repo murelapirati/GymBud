@@ -558,7 +558,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
               return (
                 <View key={exercise.id || `cardio-${exerciseIndex}`} style={[styles.card, { backgroundColor: theme.card }]}>
                   <View style={styles.exerciseHeader}>
-                    <Text style={[styles.exerciseName, { color: theme.text }]}>
+                    <Text style={[styles.exerciseName, { color: theme.text }]} numberOfLines={1} ellipsizeMode="tail">
                       {exercise.name}
                     </Text>
                     <View style={styles.exerciseActions}>
@@ -693,7 +693,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
               return (
                 <View key={exercise.id || `stretch-${exerciseIndex}`} style={[styles.card, { backgroundColor: theme.card }]}>
                   <View style={styles.exerciseHeader}>
-                    <Text style={[styles.exerciseName, { color: theme.text }]}>
+                    <Text style={[styles.exerciseName, { color: theme.text }]} numberOfLines={1} ellipsizeMode="tail">
                       {exercise.name}
                       {exercise.completed && (
                         <Ionicons name="checkmark-circle" size={20} color={theme.success} style={{ marginLeft: 8 }} />
@@ -775,7 +775,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
             return (
               <View key={exercise.id || `exercise-${exerciseIndex}`} style={[styles.card, { backgroundColor: theme.card }]}>
                 <View style={styles.exerciseHeader}>
-                  <Text style={[styles.exerciseName, { color: theme.text }]}>
+                  <Text style={[styles.exerciseName, { color: theme.text }]} numberOfLines={1} ellipsizeMode="tail">
                     {exercise.name}
                     {exercise.sets && exercise.sets.length > 0 && (
                       <Text style={[styles.setCount, { color: theme.textSecondary }]}>
@@ -1265,10 +1265,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+    gap: 8,
   },
   exerciseName: {
     fontSize: 16,
     fontWeight: '600',
+    flex: 1,
+    flexShrink: 1,
   },
   setCount: {
     fontSize: 14,
@@ -1278,6 +1281,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flexShrink: 0,
   },
   setRow: {
     flexDirection: 'row',

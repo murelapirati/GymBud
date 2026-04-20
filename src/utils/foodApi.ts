@@ -23,18 +23,45 @@ const parseProductData = (product: any, barcodeOverride?: string): ScannedProduc
     }
   }
 
+  // Standard mass/volume units that correspond to real gram/ml quantities
+  const STANDARD_UNITS = ['g', 'ml', 'oz', 'fl', 'mg', 'kg', 'l', 'lb'];
+  const isStandardUnit = (unit: string) =>
+    STANDARD_UNITS.some(u => unit.toLowerCase().startsWith(u));
+
   let servingSize = 100;
   let servingSizeUnit = 'g';
   if (product.serving_size) {
-    const match = product.serving_size.match(/(\d+\.?\d*)\s*([a-zA-Z]+)/);
-    if (match) {
-      servingSize = parseFloat(match[1]);
-      servingSizeUnit = match[2];
+    const rawServing: string = product.serving_size;
+
+    // First try parenthetical: "1 can (500 ml)" or "1 serving (28g)"
+    const parenMatch = rawServing.match(/\((\d+\.?\d*)\s*([a-zA-Z]+)\)/);
+    if (parenMatch && isStandardUnit(parenMatch[2])) {
+      servingSize = parseFloat(parenMatch[1]);
+      servingSizeUnit = parenMatch[2].toLowerCase();
+    } else {
+      // Plain parse: "330 ml", "28g", "1 can", etc.
+      const match = rawServing.match(/(\d+\.?\d*)\s*([a-zA-Z]+)/);
+      if (match) {
+        const parsedSize = parseFloat(match[1]);
+        const parsedUnit = match[2].trim().toLowerCase();
+        if (isStandardUnit(parsedUnit)) {
+          servingSize = parsedSize;
+          servingSizeUnit = parsedUnit;
+        } else {
+          // Non-standard unit (e.g. "can", "bottle") — use totalSize or 100g
+          if (totalSize != null && totalSizeUnit != null) {
+            servingSize = totalSize;
+            servingSizeUnit = totalSizeUnit;
+          }
+          // else stays at 100g default
+        }
+      }
     }
   } else if (totalSize != null && totalSizeUnit != null) {
     servingSize = totalSize;
     servingSizeUnit = totalSizeUnit;
   }
+
 
   return {
     barcode: barcodeOverride || product.code || product._id || '',
@@ -63,18 +90,49 @@ const parseProductData = (product: any, barcodeOverride?: string): ScannedProduc
   };
 };
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
- * Fetch product information from OpenFoodFacts API by barcode
+ * Fetch product information from OpenFoodFacts API by barcode.
+ * Retries up to MAX_RETRIES times with exponential backoff to handle
+ * slow API responses that initially return status=0 before the data arrives.
  */
 export const fetchProductByBarcode = async (barcode: string): Promise<ScannedProduct | null> => {
-  try {
-    const response = await axios.get(`${OPENFOODFACTS_API}/${barcode}.json`);
-    if (response.data.status === 0 || !response.data.product) return null;
-    return parseProductData(response.data.product, barcode);
-  } catch (error) {
-    console.error('Error fetching product from OpenFoodFacts:', error);
-    return null;
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 1500;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await axios.get(`${OPENFOODFACTS_API}/${barcode}.json`, {
+        timeout: 10000, // 10s per attempt
+      });
+
+      if (response.data.status !== 0 && response.data.product) {
+        return parseProductData(response.data.product, barcode);
+      }
+
+      // Product returned status=0 (not found on this attempt).
+      // If we have retries left, wait and try again in case of a slow CDN.
+      if (attempt < MAX_RETRIES) {
+        console.log(`OpenFoodFacts returned status=0 for ${barcode}, retrying (${attempt}/${MAX_RETRIES - 1})…`);
+        await delay(RETRY_DELAY_MS * attempt);
+        continue;
+      }
+
+      // All retries exhausted — product genuinely not found
+      return null;
+    } catch (error) {
+      if (attempt < MAX_RETRIES) {
+        console.warn(`fetchProductByBarcode attempt ${attempt} failed, retrying…`, error);
+        await delay(RETRY_DELAY_MS * attempt);
+        continue;
+      }
+      console.error('Error fetching product from OpenFoodFacts:', error);
+      return null;
+    }
   }
+
+  return null;
 };
 
 /**

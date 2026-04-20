@@ -17,12 +17,14 @@ interface BarcodeScannerModalProps {
   visible: boolean;
   onClose: () => void;
   onScan: (barcode: string) => void;
+  isExternallyLoading?: boolean;
 }
 
 export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   visible,
   onClose,
   onScan,
+  isExternallyLoading = false,
 }) => {
   const { theme } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
@@ -33,19 +35,26 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     if (visible) {
       requestPermission();
       setScanned(false);
+      setIsLoading(false);
     }
   }, [visible]);
 
+  // Sync internal loading with external loading state:
+  // when parent finishes loading, clear the internal flag too
+  useEffect(() => {
+    if (!isExternallyLoading && scanned) {
+      setIsLoading(false);
+    }
+  }, [isExternallyLoading]);
+
   const handleBarCodeScanned = ({ data }: { type: string; data: string }) => {
-    if (scanned || isLoading) return;
-    
+    if (scanned || isLoading || isExternallyLoading) return;
+
     setScanned(true);
     setIsLoading(true);
     onScan(data);
-    
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
+    // Loading state is now cleared via isExternallyLoading from the parent;
+    // reset our local flag when external loading finishes.
   };
 
   const handleClose = () => {

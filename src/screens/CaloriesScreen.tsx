@@ -501,6 +501,16 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
 
   return (
     <View style={[styles.container, { backgroundColor: theme.surface }]}>
+      {/* Full-screen loading overlay while barcode API call is in progress */}
+      {isLoadingProduct && (
+        <View style={[styles.loadingOverlay, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
+          <View style={[styles.loadingCard, { backgroundColor: theme.card }]}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={[styles.loadingText, { color: theme.text }]}>Looking up product…</Text>
+            <Text style={[styles.loadingSubText, { color: theme.textSecondary }]}>This may take a moment</Text>
+          </View>
+        </View>
+      )}
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.text }]}>Calorie Tracker</Text>
@@ -846,6 +856,7 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
         visible={showScannerModal}
         onClose={() => setShowScannerModal(false)}
         onScan={handleBarcodeScan}
+        isExternallyLoading={isLoadingProduct}
       />
 
       <ProductDetailsModal
@@ -928,6 +939,31 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingCard: {
+    borderRadius: 16,
+    padding: 28,
+    alignItems: 'center',
+    gap: 12,
+    minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingSubText: {
+    fontSize: 13,
   },
   safeArea: {
     flex: 1,
