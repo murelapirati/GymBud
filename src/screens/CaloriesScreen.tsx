@@ -102,6 +102,7 @@ const MacroCircle = ({ progress, color }: { progress: number; color: string }) =
 
 // Mini circular progress for calendar days
 const MiniCalendarCircle = ({ progress, isOverLimit }: { progress: number; isOverLimit: boolean }) => {
+  const { theme } = useTheme();
   const size = 28;
   const strokeWidth = 2.5;
   const radius = (size - strokeWidth) / 2;
@@ -123,16 +124,16 @@ const MiniCalendarCircle = ({ progress, isOverLimit }: { progress: number; isOve
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="#E0E0E0"
+          stroke={theme.border}
           strokeWidth={strokeWidth}
           fill="none"
         />
-        {/* Consumed calories circle (blue) - always shows up to 100% */}
+        {/* Consumed calories circle - always shows up to 100% */}
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="#2196F3"
+          stroke={theme.primary}
           strokeWidth={strokeWidth}
           fill="none"
           strokeDasharray={circumference}
@@ -973,33 +974,44 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 20,
+    paddingBottom: 4,
   },
   title: {
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   headerButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   settingsButton: {
-    padding: 4,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollView: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 12,
   },
   scrollContent: {
     paddingBottom: 20,
   },
   chartContainer: {
     flexDirection: 'row',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 20,
     gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
   },
   caloriesSection: {
     flex: 2,
@@ -1009,7 +1021,7 @@ const styles = StyleSheet.create({
   macrosSection: {
     flex: 1,
     justifyContent: 'space-around',
-    gap: 8,
+    gap: 10,
   },
   macroItem: {
     flexDirection: 'row',
@@ -1020,13 +1032,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   macroLabel: {
-    fontSize: 11,
+    fontSize: 10,
     textTransform: 'uppercase',
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.8,
   },
   macroValue: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
   },
   macroGoal: {
     fontSize: 11,
@@ -1034,156 +1047,178 @@ const styles = StyleSheet.create({
   addButton: {
     flex: 1,
     flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   addButtonText: {
     color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     marginBottom: 24,
   },
   recipesButton: {
     flex: 1,
     flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   scanButton: {
     flex: 1,
     flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   scanButtonText: {
     color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
   },
   entriesContainer: {
-    gap: 12,
+    gap: 10,
   },
   entriesTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '700',
     marginBottom: 8,
+    letterSpacing: 0.2,
   },
   entryCard: {
-    padding: 16,
-    borderRadius: 12,
+    padding: 14,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   entryImage: {
     width: 48,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 10,
     flexShrink: 0,
   },
   entryLeft: {
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
   entryTime: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 0.3,
   },
   entryName: {
     fontSize: 14,
-    fontWeight: '600',
-    marginTop: 2,
-    marginBottom: 2,
+    fontWeight: '700',
+    marginTop: 1,
+    marginBottom: 3,
   },
   entryMacros: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   entryMacroText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
   },
   entryCaloriesText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '800',
+    marginTop: 2,
   },
   deleteButton: {
-    padding: 8,
-    marginLeft: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
+
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     paddingHorizontal: 20,
   },
   keyboardAvoidingView: {
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 420,
   },
   modalContent: {
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 24,
+    padding: 22,
     width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 12,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 22,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   modalScrollContent: {
     paddingBottom: 10,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 18,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     marginBottom: 8,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   input: {
-    padding: 12,
-    borderRadius: 8,
+    padding: 13,
+    borderRadius: 12,
     fontSize: 16,
     borderWidth: 1,
   },
   submitButton: {
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: 'center',
     marginTop: 10,
   },
   submitButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   historyModalContent: {
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 20,
     width: '95%',
     maxWidth: 700,
@@ -1197,13 +1232,13 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 12,
   },
   todayButtonText: {
     color: 'white',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   monthNavigation: {
     flexDirection: 'row',
@@ -1213,9 +1248,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   monthNavButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -1225,10 +1260,11 @@ const styles = StyleSheet.create({
   },
   monthTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     flex: 1,
     textAlign: 'center',
   },
+
   calendarScrollView: {
     flex: 1,
   },

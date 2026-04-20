@@ -45,12 +45,12 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
           fill="none"
         />
         
-        {/* Consumed calories circle (blue) */}
+        {/* Consumed calories circle */}
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="#2196F3"
+          stroke={theme.primary}
           strokeWidth={strokeWidth}
           fill="none"
           strokeDasharray={circumference}
@@ -66,7 +66,7 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
             cx={size / 2}
             cy={size / 2}
             r={radius}
-            stroke="#F44336"
+            stroke={theme.error}
             strokeWidth={strokeWidth}
             fill="none"
             strokeDasharray={circumference}
@@ -81,7 +81,7 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
       {/* Center text */}
       <View style={styles.centerContent}>
         <Text style={[styles.remainingText, { 
-          color: isOverLimit ? '#F44336' : '#2196F3',
+          color: isOverLimit ? theme.error : theme.primary,
           textShadowColor: 'rgba(0, 0, 0, 0.3)',
           textShadowOffset: { width: 0, height: 2 },
           textShadowRadius: 4,

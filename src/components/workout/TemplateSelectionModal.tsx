@@ -185,15 +185,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     paddingHorizontal: 20,
   },
   modalContent: {
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 24,
+    padding: 24,
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 420,
     maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 12,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -202,8 +207,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   scrollContent: {
     gap: 12,
@@ -219,7 +225,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     textAlign: 'center',
   },
   emptySubtext: {
@@ -229,9 +235,14 @@ const styles = StyleSheet.create({
   },
   templateCard: {
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   templateHeader: {
     flexDirection: 'row',
@@ -240,7 +251,7 @@ const styles = StyleSheet.create({
   },
   templateName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     flex: 1,
   },
   templateMeta: {

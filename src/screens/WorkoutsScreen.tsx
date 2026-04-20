@@ -1060,6 +1060,16 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {isToday && (
+          <TouchableOpacity
+            style={[styles.addButton, { backgroundColor: theme.primary }]}
+            onPress={startWorkout}
+          >
+            <Ionicons name="barbell-outline" size={24} color="white" />
+            <Text style={styles.addButtonText}>Start Workout</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Activity Rings Card */}
         <ActivityRingsCard
           theme={theme}
@@ -1125,15 +1135,6 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
           </View>
         )}
 
-        {isToday && (
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: theme.primary }]}
-            onPress={startWorkout}
-          >
-            <Ionicons name="barbell-outline" size={24} color="white" />
-            <Text style={styles.addButtonText}>Start Workout</Text>
-          </TouchableOpacity>
-        )}
       </ScrollView>
 
       {/* Workout Type Selection Modal */}
@@ -1269,19 +1270,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
   },
   topBarTitle: {
-    fontSize: 22,
-    fontWeight: '500',
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   headerButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   iconButton: {
-    padding: 4,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     paddingHorizontal: 20,
@@ -1289,6 +1296,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
+    letterSpacing: 0.2,
   },
   scrollView: {
     flex: 1,
@@ -1297,14 +1305,19 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   card: {
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 20,
     borderWidth: 1,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '700',
     marginBottom: 12,
   },
 
@@ -1342,12 +1355,13 @@ const styles = StyleSheet.create({
   // Shared modal styles (used by Edit Workout Modal)
   editNotesTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   editNotesInput: {
     borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 14,
     fontSize: 16,
     minHeight: 120,
   },
@@ -1358,23 +1372,25 @@ const styles = StyleSheet.create({
   editNotesModalButton: {
     flex: 1,
     padding: 14,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
   },
   editNotesButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
   editNotesSection: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 12,
     marginBottom: 12,
   },
   editNotesLabel: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     marginBottom: 8,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
 
   addButton: {
@@ -1383,35 +1399,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 16,
   },
   addButtonText: {
     color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
   backToTodayButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    padding: 12,
-    borderRadius: 12,
+    padding: 14,
+    borderRadius: 14,
     marginBottom: 16,
   },
   backToTodayText: {
     color: 'white',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
 
   historyDetailCard: {
-    borderRadius: 10,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   historyDetailHeader: {
     flexDirection: 'row',
@@ -1421,7 +1442,7 @@ const styles = StyleSheet.create({
   },
   historyDetailDate: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   historyExerciseItem: {
     paddingVertical: 6,
@@ -1433,7 +1454,7 @@ const styles = StyleSheet.create({
   },
 
   dayDetailModalContent: {
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 20,
     width: '95%',
     maxWidth: 700,
@@ -1445,6 +1466,4 @@ const styles = StyleSheet.create({
   dayDetailContent: {
     paddingBottom: 20,
   },
-
-
 });

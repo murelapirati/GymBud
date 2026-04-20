@@ -416,8 +416,8 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
         <View style={styles.headerCenter}>
           <View style={styles.headerTitleRow}>
             <Text style={[styles.headerTitle, { color: theme.text }]}>Active Workout</Text>
-            <View style={[styles.workoutTypeBadge, { backgroundColor: workoutTypeInfo.color + '20', borderColor: workoutTypeInfo.color + '40' }]}>
-              <Ionicons name={workoutTypeInfo.icon} size={14} color={workoutTypeInfo.color} />
+            <View style={[styles.workoutTypeBadge, { backgroundColor: workoutTypeInfo.color + '30' }]}>
+              <Ionicons name={workoutTypeInfo.icon} size={12} color={workoutTypeInfo.color} />
               <Text style={[styles.workoutTypeText, { color: workoutTypeInfo.color }]}>
                 {workoutTypeInfo.label}
               </Text>
@@ -832,11 +832,12 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                       return (
                         <View key={set.id} style={[styles.setRow, { borderColor: theme.border }]}>
                           <View style={styles.setLeftSection}>
-                            <Ionicons name="checkmark-circle" size={20} color={theme.success} />
-                            <Text style={[styles.setText, { color: theme.textSecondary }]}>Set {index + 1}</Text>
+                            <View style={[styles.setNumberBadge, { backgroundColor: theme.primary + '18' }]}>
+                              <Text style={[styles.setNumberText, { color: theme.primary }]}>{index + 1}</Text>
+                            </View>
                           </View>
                           <View style={styles.setMiddleSection}>
-                            <Text style={[styles.setText, { color: theme.text }]}>
+                            <Text style={[styles.setText, { color: theme.text, fontWeight: '700', fontSize: 15 }]}>
                               {set.reps} reps{formattedWeight ? ` × ${formattedWeight} ${weightLabel}` : ''}
                             </Text>
                             <Text style={[styles.restTimeText, { color: theme.textSecondary }]}>
@@ -845,10 +846,10 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                           </View>
                           <View style={styles.setActions}>
                             <TouchableOpacity onPress={() => handleEditSet(exercise.id, set.id)}>
-                              <Ionicons name="pencil" size={18} color={theme.primary} />
+                              <Ionicons name="pencil" size={16} color={theme.primary} />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => deleteSet(exercise.id, set.id)}>
-                              <Ionicons name="trash" size={18} color={theme.error} />
+                              <Ionicons name="trash" size={16} color={theme.error} />
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1164,7 +1165,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   header: {
@@ -1172,11 +1173,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
   },
   backButton: {
-    padding: 4,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerCenter: {
     flex: 1,
@@ -1188,29 +1193,33 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   workoutTypeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 1,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    borderWidth: 0,
   },
   workoutTypeText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   headerTimer: {
-    fontSize: 14,
-    marginTop: 2,
+    fontSize: 13,
+    marginTop: 3,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.5,
   },
   headerActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   finishButton: {
     padding: 4,
@@ -1223,21 +1232,27 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
   card: {
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     marginBottom: 12,
+    letterSpacing: 0.2,
   },
   input: {
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     fontSize: 16,
     borderWidth: 1,
     marginBottom: 12,
@@ -1253,12 +1268,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     padding: 14,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   addButtonText: {
     color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
   exerciseHeader: {
     flexDirection: 'row',
@@ -1295,6 +1310,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  setNumberBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  setNumberText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
   setMiddleSection: {
     flex: 1,
     marginLeft: 12,
@@ -1311,12 +1337,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   logSetForm: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128,128,128,0.15)',
   },
   startSetButton: {
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
   },
@@ -1333,32 +1361,36 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '700',
     marginBottom: 6,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   smallInput: {
-    padding: 10,
-    borderRadius: 8,
-    fontSize: 15,
+    padding: 12,
+    borderRadius: 12,
+    fontSize: 18,
+    fontWeight: '700',
     borderWidth: 1,
+    textAlign: 'center',
   },
   logSetButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   logButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 12,
   },
   logButtonText: {
     color: 'white',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   restPickerOverlay: {
     flex: 1,

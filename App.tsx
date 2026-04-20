@@ -126,9 +126,9 @@ function MainApp() {
       {/* Rest Timer Completion Modal */}
       <Modal visible={restTimerCompleted} transparent={true} animationType="fade">
         <View style={styles.completionOverlay}>
-          <View style={[styles.completionContent, { backgroundColor: theme.card }]}>
-            <View style={[styles.completionIconContainer, { backgroundColor: theme.primary + '20' }]}>
-              <Ionicons name="checkmark-circle" size={64} color={theme.primary} />
+          <View style={[styles.completionContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={[styles.completionIconContainer, { backgroundColor: theme.primary + '25' }]}>
+              <Ionicons name="checkmark-circle" size={72} color={theme.primary} />
             </View>
             <Text style={[styles.completionTitle, { color: theme.text }]}>Rest Complete!</Text>
             <Text style={[styles.completionSubtitle, { color: theme.textSecondary }]}>
@@ -138,7 +138,7 @@ function MainApp() {
               style={[styles.completionButton, { backgroundColor: theme.primary }]}
               onPress={handleRestTimerComplete}
             >
-              <Text style={styles.completionButtonText}>Continue</Text>
+              <Text style={styles.completionButtonText}>Let's Go 💪</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -148,58 +148,40 @@ function MainApp() {
         {renderScreen()}
       </View>
       {!showSettings && !showGoals && !showWorkoutGoals && !showActiveWorkout && !showRestTimer && (
-        <View style={[styles.tabBar, { backgroundColor: theme.tabBar, borderTopColor: theme.border }]}>
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => setActiveScreen('Calories')}
-          >
-            <Ionicons 
-              name="flame-outline" 
-              size={28} 
-              color={activeScreen === 'Calories' ? theme.tabBarActive : theme.tabBarInactive}
-              style={styles.tabIcon}
-            />
-            <Text style={[
-              styles.tabText, 
-              { color: activeScreen === 'Calories' ? theme.tabBarActive : theme.tabBarInactive }
-            ]}>
-              Calories
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => setActiveScreen('Library')}
-          >
-            <Ionicons 
-              name="library-outline" 
-              size={28} 
-              color={activeScreen === 'Library' ? theme.tabBarActive : theme.tabBarInactive}
-              style={styles.tabIcon}
-            />
-            <Text style={[
-              styles.tabText, 
-              { color: activeScreen === 'Library' ? theme.tabBarActive : theme.tabBarInactive }
-            ]}>
-              Library
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => setActiveScreen('Workouts')}
-          >
-            <Ionicons 
-              name="barbell-outline" 
-              size={28} 
-              color={activeScreen === 'Workouts' ? theme.tabBarActive : theme.tabBarInactive}
-              style={styles.tabIcon}
-            />
-            <Text style={[
-              styles.tabText, 
-              { color: activeScreen === 'Workouts' ? theme.tabBarActive : theme.tabBarInactive }
-            ]}>
-              Workouts
-            </Text>
-          </TouchableOpacity>
+        <View style={[styles.tabBar, { backgroundColor: theme.tabBar }]}>
+          {[
+            { key: 'Calories', label: 'Nutrition', icon: 'flame' as const },
+            { key: 'Library', label: 'Library', icon: 'library' as const },
+            { key: 'Workouts', label: 'Workouts', icon: 'barbell' as const },
+          ].map(tab => {
+            const isActive = activeScreen === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={styles.tab}
+                onPress={() => setActiveScreen(tab.key)}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.tabIconWrapper,
+                  isActive && { backgroundColor: theme.primary + '20' },
+                ]}>
+                  <Ionicons
+                    name={isActive ? tab.icon : `${tab.icon}-outline` as any}
+                    size={24}
+                    color={isActive ? theme.tabBarActive : theme.tabBarInactive}
+                  />
+                </View>
+                <Text style={[
+                  styles.tabText,
+                  { color: isActive ? theme.tabBarActive : theme.tabBarInactive },
+                  isActive && styles.tabTextActive,
+                ]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
     </SafeAreaView>
@@ -225,63 +207,92 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    paddingTop: 15,
-    height: 80,
+    paddingTop: 8,
+    paddingBottom: 4,
+    paddingHorizontal: 8,
+    height: 72,
+    borderTopWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 16,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
+  },
+  tabIconWrapper: {
+    width: 48,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
   tabIcon: {
-    fontSize: 28,
     marginBottom: 4,
   },
   tabText: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+  },
+  tabTextActive: {
+    fontWeight: '700',
   },
   completionOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   completionContent: {
-    borderRadius: 20,
-    padding: 32,
+    borderRadius: 24,
+    padding: 36,
     alignItems: 'center',
-    width: '85%',
+    width: '88%',
     maxWidth: 360,
+    borderWidth: 1,
+    shadowColor: '#7C5CFC',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 16,
   },
   completionIconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   completionTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 30,
+    fontWeight: '800',
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   completionSubtitle: {
     fontSize: 16,
-    marginBottom: 28,
+    marginBottom: 32,
+    textAlign: 'center',
   },
   completionButton: {
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 48,
-    borderRadius: 12,
+    borderRadius: 14,
     width: '100%',
   },
   completionButtonText: {
     color: 'white',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
 });

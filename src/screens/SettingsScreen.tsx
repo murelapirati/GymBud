@@ -227,7 +227,9 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
         >
           <View style={styles.settingRow}>
             <View style={styles.settingLeft}>
-              <Ionicons name="restaurant-outline" size={24} color={theme.primary} style={styles.settingIcon} />
+              <View style={[styles.settingIconBg, { backgroundColor: '#7C5CFC22' }]}>
+                <Ionicons name="restaurant-outline" size={20} color={theme.primary} />
+              </View>
               <View>
                 <Text style={[styles.settingTitle, { color: theme.text }]}>Calorie & Macro Goals</Text>
                 <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
@@ -235,7 +237,7 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
                 </Text>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={24} color={theme.textSecondary} />
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
           </View>
         </TouchableOpacity>
 
@@ -246,7 +248,9 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
         >
           <View style={styles.settingRow}>
             <View style={styles.settingLeft}>
-              <Ionicons name="barbell-outline" size={24} color={theme.primary} style={styles.settingIcon} />
+              <View style={[styles.settingIconBg, { backgroundColor: '#34D39922' }]}>
+                <Ionicons name="barbell-outline" size={20} color={theme.success} />
+              </View>
               <View>
                 <Text style={[styles.settingTitle, { color: theme.text }]}>Workout Goals</Text>
                 <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
@@ -254,7 +258,7 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
                 </Text>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={24} color={theme.textSecondary} />
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
           </View>
         </TouchableOpacity>
 
@@ -320,7 +324,9 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
         <View style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View>
             <View style={styles.settingLeft}>
-              <Ionicons name="analytics-outline" size={24} color={theme.primary} style={styles.settingIcon} />
+              <View style={[styles.settingIconBg, { backgroundColor: '#FBBF2422' }]}>
+                <Ionicons name="analytics-outline" size={20} color={theme.warning} />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.settingTitle, { color: theme.text }]}>Step Multiplier</Text>
                 <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
@@ -351,21 +357,23 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
         </View>
 
         <TouchableOpacity 
-          style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+          style={[styles.settingCard, { backgroundColor: '#F8717118', borderColor: '#F8717130' }]}
           onPress={handleClearData}
           activeOpacity={0.7}
         >
           <View style={styles.settingRow}>
             <View style={styles.settingLeft}>
-              <Ionicons name="trash-outline" size={24} color="#ff3b30" style={styles.settingIcon} />
+              <View style={[styles.settingIconBg, { backgroundColor: '#F8717122' }]}>
+                <Ionicons name="trash-outline" size={20} color="#F87171" />
+              </View>
               <View>
-                <Text style={[styles.settingTitle, { color: '#ff3b30' }]}>Clear App Data</Text>
+                <Text style={[styles.settingTitle, { color: '#F87171' }]}>Clear App Data</Text>
                 <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
                   Delete workouts, calories, or all data
                 </Text>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={24} color={theme.textSecondary} />
+            <Ionicons name="chevron-forward" size={20} color="#F87171" />
           </View>
         </TouchableOpacity>
       </ScrollView>
@@ -381,20 +389,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
     borderBottomWidth: 1,
   },
   backButton: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   topBarTitle: {
-    fontSize: 18,
+    fontSize: 20,
+    fontWeight: '700',
     flex: 1,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   placeholder: {
-    width: 36,
+    width: 40,
   },
   content: {
     padding: 16,
@@ -403,16 +417,23 @@ const styles = StyleSheet.create({
     paddingBottom: 200,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    marginTop: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 10,
+    marginTop: 20,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   settingCard: {
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    marginBottom: 20,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   settingRow: {
     flexDirection: 'row',
@@ -423,26 +444,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    gap: 14,
+  },
+  settingIconBg: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   settingIcon: {
     marginRight: 12,
   },
   settingTitle: {
     fontSize: 16,
-    marginBottom: 4,
+    fontWeight: '600',
+    marginBottom: 3,
   },
   settingDescription: {
-    fontSize: 14,
+    fontSize: 13,
   },
   offsetInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 14,
     gap: 12,
   },
   offsetInput: {
     flex: 1,
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 12,
     fontSize: 18,
     borderWidth: 1,
@@ -450,12 +480,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   saveOffsetButton: {
-    borderRadius: 8,
-    paddingHorizontal: 24,
+    borderRadius: 10,
+    paddingHorizontal: 20,
     paddingVertical: 12,
   },
   saveOffsetButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
+

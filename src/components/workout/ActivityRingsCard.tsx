@@ -35,7 +35,7 @@ export const ActivityRingsCard: React.FC<ActivityRingsCardProps> = ({
           exerciseGoal={exerciseMinutesGoal}
           caloriesBurned={todayCaloriesBurned}
           caloriesGoal={caloriesBurnedGoal}
-          size={180}
+          size={150}
         />
       </View>
       <View style={styles.ringLegend}>
@@ -64,22 +64,27 @@ export const ActivityRingsCard: React.FC<ActivityRingsCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 20,
     borderWidth: 1,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '500',
-    marginBottom: 12,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
   },
   activityHeader: {
     marginBottom: 16,
   },
   ringsContainer: {
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: 12,
   },
   ringLegend: {
     marginTop: 16,
@@ -97,5 +102,6 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 14,
+    fontWeight: '600',
   },
 });

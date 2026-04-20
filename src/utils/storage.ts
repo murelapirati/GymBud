@@ -17,6 +17,7 @@ export const STORAGE_KEYS = {
   WORKOUT_TEMPLATES: '@gymapp_workout_templates',
   PROMPT_SAVE_TEMPLATE: '@gymapp_prompt_save_template',
   PRODUCT_CACHE: '@gymapp_product_cache',
+  LIBRARY_COLLAPSED_SECTIONS: '@gymapp_library_collapsed_sections',
 } as const;
 
 // Generic storage functions

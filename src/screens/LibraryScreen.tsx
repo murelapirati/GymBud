@@ -31,7 +31,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [showRecipeEdit, setShowRecipeEdit] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | undefined>(undefined);
-  
+
   // Workout builder state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newWorkoutName, setNewWorkoutName] = useState('');
@@ -43,19 +43,45 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   const [editingTemplate, setEditingTemplate] = useState<WorkoutTemplate | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Set<WorkoutType>>(new Set());
 
-  const toggleSection = (workoutType: WorkoutType) => {
-    setCollapsedSections(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(workoutType)) {
-        newSet.delete(workoutType);
+  const toggleSection = async (workoutType: WorkoutType) => {
+    try {
+      setCollapsedSections(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(workoutType)) {
+          newSet.delete(workoutType);
+        } else {
+          newSet.add(workoutType);
+        }
+
+        // Save state asynchronously without awaiting
+        storage.setItem(STORAGE_KEYS.LIBRARY_COLLAPSED_SECTIONS, Array.from(newSet))
+          .catch(err => console.error('Error saving collapsed state:', err));
+
+        return newSet;
+      });
+    } catch (e) {
+      console.error('Error toggling section:', e);
+    }
+  };
+
+  const loadCollapsedSections = async () => {
+    try {
+      const saved = await storage.getItem<WorkoutType[]>(STORAGE_KEYS.LIBRARY_COLLAPSED_SECTIONS);
+      if (saved) {
+        setCollapsedSections(new Set(saved));
       } else {
-        newSet.add(workoutType);
+        // Default to all collapsed
+        const allTypes: WorkoutType[] = ['gym', 'cardio', 'calisthenics', 'stretching'];
+        setCollapsedSections(new Set(allTypes));
+        await storage.setItem(STORAGE_KEYS.LIBRARY_COLLAPSED_SECTIONS, allTypes);
       }
-      return newSet;
-    });
+    } catch (error) {
+      console.error('Error loading collapsed sections:', error);
+    }
   };
 
   useEffect(() => {
+    loadCollapsedSections();
     loadTemplates();
     loadRecipes();
   }, []);
@@ -219,16 +245,16 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   const moveExercise = (id: string, direction: 'up' | 'down') => {
     const currentIndex = newExercises.findIndex(ex => ex.id === id);
     if (currentIndex === -1) return;
-    
+
     const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-    
+
     // Check bounds
     if (newIndex < 0 || newIndex >= newExercises.length) return;
-    
+
     // Swap exercises
     const updated = [...newExercises];
     [updated[currentIndex], updated[newIndex]] = [updated[newIndex], updated[currentIndex]];
-    
+
     setNewExercises(updated);
   };
 
@@ -237,7 +263,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
       Alert.alert('No Exercises', 'Please add at least one exercise');
       return;
     }
-    
+
     // If editing and name already exists, save directly
     if (editingTemplate && newWorkoutName.trim()) {
       saveWorkout();
@@ -264,8 +290,8 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
     try {
       if (editingTemplate) {
         // Update existing template
-        const updatedTemplates = templates.map(t => 
-          t.id === editingTemplate.id 
+        const updatedTemplates = templates.map(t =>
+          t.id === editingTemplate.id
             ? { ...t, name: newWorkoutName.trim(), exercises: newExercises }
             : t
         );
@@ -286,7 +312,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
         setTemplates(updatedTemplates);
         Alert.alert('Success', 'Workout saved successfully!');
       }
-      
+
       setShowCreateModal(false);
       setShowNamePrompt(false);
       setNewWorkoutName('');
@@ -332,7 +358,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Library</Text>
         <TouchableOpacity onPress={onOpenSettings} style={styles.settingsButton}>
-          <Ionicons name="settings-outline" size={24} color={theme.text} />
+          <Ionicons name="settings-outline" size={24} color={theme.primary} />
         </TouchableOpacity>
       </View>
 
@@ -342,9 +368,9 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
           style={[styles.tabButton, activeTab === 'recipes' && styles.activeTabButton]}
           onPress={() => setActiveTab('recipes')}
         >
-          <Ionicons 
-            name="restaurant-outline" 
-            size={20} 
+          <Ionicons
+            name="restaurant-outline"
+            size={20}
             color={activeTab === 'recipes' ? theme.primary : theme.textSecondary}
           />
           <Text style={[
@@ -362,9 +388,9 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
           style={[styles.tabButton, activeTab === 'templates' && styles.activeTabButton]}
           onPress={() => setActiveTab('templates')}
         >
-          <Ionicons 
-            name="barbell-outline" 
-            size={20} 
+          <Ionicons
+            name="barbell-outline"
+            size={20}
             color={activeTab === 'templates' ? theme.primary : theme.textSecondary}
           />
           <Text style={[
@@ -458,22 +484,22 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                 {(Object.keys(groupedTemplates) as WorkoutType[]).map(workoutType => {
                   const isCollapsed = collapsedSections.has(workoutType);
                   const templateCount = groupedTemplates[workoutType].length;
-                  
+
                   return (
                     <View key={workoutType}>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={[styles.sectionHeader, { backgroundColor: theme.surface, borderColor: theme.border }]}
                         onPress={() => toggleSection(workoutType)}
                         activeOpacity={0.7}
                       >
                         <View style={styles.sectionHeaderLeft}>
-                          <Ionicons 
+                          <Ionicons
                             name={getWorkoutTypeIcon(workoutType)}
-                            size={20} 
+                            size={20}
                             color={theme.primary}
                             style={{ marginRight: 8 }}
                           />
-                          <Text style={[styles.sectionTitle, { color: theme.text }]}>      
+                          <Text style={[styles.sectionTitle, { color: theme.text }]}>
                             {getWorkoutTypeLabel(workoutType)} Workouts
                           </Text>
                           <View style={[styles.countBadge, { backgroundColor: theme.primary + '20' }]}>
@@ -482,70 +508,70 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                             </Text>
                           </View>
                         </View>
-                        <Ionicons 
+                        <Ionicons
                           name={isCollapsed ? "chevron-down" : "chevron-up"}
-                          size={24} 
+                          size={24}
                           color={theme.textSecondary}
                         />
                       </TouchableOpacity>
-                      
+
                       {!isCollapsed && groupedTemplates[workoutType].map(template => (
-                      <View
-                        key={template.id}
-                        style={[styles.templateCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-                      >
-                        <View style={styles.templateHeader}>
-                          <View style={styles.templateInfo}>
-                            <View style={[styles.typeIcon, { backgroundColor: theme.primary + '20' }]}>
-                              <Ionicons 
-                                name={getWorkoutTypeIcon(template.workoutType)} 
-                                size={20} 
-                                color={theme.primary} 
-                              />
+                        <View
+                          key={template.id}
+                          style={[styles.templateCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+                        >
+                          <View style={styles.templateHeader}>
+                            <View style={styles.templateInfo}>
+                              <View style={[styles.typeIcon, { backgroundColor: theme.primary + '20' }]}>
+                                <Ionicons
+                                  name={getWorkoutTypeIcon(template.workoutType)}
+                                  size={20}
+                                  color={theme.primary}
+                                />
+                              </View>
+                              <View style={styles.templateText}>
+                                <Text style={[styles.templateName, { color: theme.text }]}>
+                                  {template.name}
+                                </Text>
+                                <Text style={[styles.templateMeta, { color: theme.textSecondary }]}>
+                                  {template.exercises.length} exercise{template.exercises.length !== 1 ? 's' : ''} • Created {formatDate(template.createdAt)}
+                                </Text>
+                              </View>
                             </View>
-                            <View style={styles.templateText}>
-                              <Text style={[styles.templateName, { color: theme.text }]}>
-                                {template.name}
-                              </Text>
-                              <Text style={[styles.templateMeta, { color: theme.textSecondary }]}>
-                                {template.exercises.length} exercise{template.exercises.length !== 1 ? 's' : ''} • Created {formatDate(template.createdAt)}
-                              </Text>
+                            <View style={styles.actionButtons}>
+                              <TouchableOpacity
+                                onPress={() => startEditWorkout(template)}
+                                style={styles.editButton}
+                              >
+                                <Ionicons name="create-outline" size={20} color={theme.primary} />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => deleteTemplate(template.id)}
+                                style={styles.deleteButton}
+                              >
+                                <Ionicons name="trash-outline" size={20} color={theme.error} />
+                              </TouchableOpacity>
                             </View>
                           </View>
-                          <View style={styles.actionButtons}>
-                            <TouchableOpacity
-                              onPress={() => startEditWorkout(template)}
-                              style={styles.editButton}
-                            >
-                              <Ionicons name="create-outline" size={20} color={theme.primary} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={() => deleteTemplate(template.id)}
-                              style={styles.deleteButton}
-                            >
-                              <Ionicons name="trash-outline" size={20} color={theme.error} />
-                            </TouchableOpacity>
+
+                          <View style={styles.exerciseList}>
+                            {template.exercises.map((exercise, index) => (
+                              <View key={exercise.id} style={styles.exerciseItem}>
+                                <Text style={[styles.exerciseNumber, { color: theme.textSecondary }]}>
+                                  {index + 1}.
+                                </Text>
+                                <Text style={[styles.exerciseName, { color: theme.text }]}>
+                                  {exercise.name}
+                                </Text>
+                              </View>
+                            ))}
                           </View>
                         </View>
-                        
-                        <View style={styles.exerciseList}>
-                          {template.exercises.map((exercise, index) => (
-                            <View key={exercise.id} style={styles.exerciseItem}>
-                              <Text style={[styles.exerciseNumber, { color: theme.textSecondary }]}>
-                                {index + 1}.
-                              </Text>
-                              <Text style={[styles.exerciseName, { color: theme.text }]}>
-                                {exercise.name}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                      </View>
-                    ))}
+                      ))}
                     </View>
                   );
                 })}
-              </>  
+              </>
             )}
           </>
         )}
@@ -609,7 +635,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                   <Text style={[styles.modalTitle, { color: theme.text }]}>
                     {editingTemplate ? 'Edit' : 'Create'} {getWorkoutTypeLabel(newWorkoutType)} Workout
                   </Text>
-                  
+
                   {editingTemplate && (
                     <View style={styles.editNameSection}>
                       <Text style={[styles.editNameLabel, { color: theme.textSecondary }]}>Workout Name</Text>
@@ -622,7 +648,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                       />
                     </View>
                   )}
-                  
+
                   <View style={styles.addExerciseSection}>
                     <TextInput
                       style={[styles.exerciseNameInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
@@ -656,14 +682,14 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                               {exercise.name}
                             </Text>
                             <View style={styles.exerciseItemActions}>
-                              <TouchableOpacity 
+                              <TouchableOpacity
                                 onPress={() => moveExercise(exercise.id, 'up')}
                                 disabled={index === 0}
                                 style={{ opacity: index === 0 ? 0.3 : 1 }}
                               >
                                 <Ionicons name="arrow-up" size={20} color={theme.textSecondary} />
                               </TouchableOpacity>
-                              <TouchableOpacity 
+                              <TouchableOpacity
                                 onPress={() => moveExercise(exercise.id, 'down')}
                                 disabled={index === newExercises.length - 1}
                                 style={{ opacity: index === newExercises.length - 1 ? 0.3 : 1 }}
@@ -757,35 +783,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   settingsButton: {
-    padding: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabContainer: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
   },
   tabButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
-    position: 'relative',
+    paddingVertical: 10,
+    gap: 6,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
   },
-  activeTabButton: {
-    // Styling handled by indicator
-  },
+  activeTabButton: {},
   tabText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
   },
   tabIndicator: {
     position: 'absolute',
@@ -803,27 +836,27 @@ const styles = StyleSheet.create({
   emptyState: {
     marginTop: 60,
     padding: 32,
-    borderRadius: 12,
+    borderRadius: 20,
     alignItems: 'center',
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: '700',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyDescription: {
     fontSize: 14,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 21,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 10,
     marginTop: 8,
     borderWidth: 1,
   },
@@ -833,8 +866,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
   },
   countBadge: {
     paddingHorizontal: 8,
@@ -844,13 +877,18 @@ const styles = StyleSheet.create({
   },
   countBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   templateCard: {
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 12,
     borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   templateHeader: {
     flexDirection: 'row',
@@ -866,7 +904,7 @@ const styles = StyleSheet.create({
   typeIcon: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -876,7 +914,7 @@ const styles = StyleSheet.create({
   },
   templateName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 4,
   },
   templateMeta: {
@@ -884,65 +922,81 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 4,
   },
   editButton: {
-    padding: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deleteButton: {
-    padding: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   exerciseList: {
-    gap: 8,
+    gap: 6,
   },
   exerciseItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   exerciseNumber: {
-    fontSize: 14,
-    marginRight: 8,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
+    width: 22,
+    textAlign: 'right',
   },
   exerciseName: {
     fontSize: 14,
+    flex: 1,
   },
   createButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
     marginTop: 24,
     gap: 8,
   },
   createButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   floatingButton: {
     position: 'absolute',
-    right: 16,
-    bottom: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    right: 20,
+    bottom: 20,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowColor: '#7C5CFC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
   recipeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    marginBottom: 12,
+    marginBottom: 10,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   recipeCardImage: {
     width: 80,
@@ -968,26 +1022,27 @@ const styles = StyleSheet.create({
   },
   recipeCardMacros: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   recipeDeleteBtn: {
     padding: 12,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
   },
   createModal: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 20,
     maxHeight: '90%',
   },
   modalTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontWeight: '800',
     marginBottom: 20,
+    letterSpacing: -0.3,
   },
   typeGrid: {
     flexDirection: 'row',
@@ -998,48 +1053,48 @@ const styles = StyleSheet.create({
   typeCard: {
     width: '48%',
     aspectRatio: 1.5,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 14,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   typeLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   editNameSection: {
     marginBottom: 16,
   },
   editNameLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     marginBottom: 6,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   editNameInput: {
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 13,
     fontSize: 16,
     borderWidth: 1,
   },
   addExerciseSection: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     marginBottom: 16,
   },
   exerciseNameInput: {
     flex: 1,
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 13,
     fontSize: 16,
     borderWidth: 1,
   },
   addButton: {
     width: 48,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1047,26 +1102,30 @@ const styles = StyleSheet.create({
     maxHeight: 400,
   },
   exercisesLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 10,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   exerciseItem2: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 8,
     borderWidth: 1,
   },
   exerciseNumber2: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     marginRight: 12,
     width: 24,
+    textAlign: 'right',
   },
   exerciseName2: {
     fontSize: 15,
+    fontWeight: '500',
     flex: 1,
   },
   exerciseItemActions: {
@@ -1078,7 +1137,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     padding: 40,
-    lineHeight: 20,
+    lineHeight: 21,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -1089,12 +1148,12 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: 14,
     alignItems: 'center',
   },
   cancelButton: {
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: 14,
     alignItems: 'center',
     borderWidth: 1,
   },
@@ -1102,20 +1161,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   cancelButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
-  saveButton: {
-    // backgroundColor set dynamically
-  },
+  saveButton: {},
   saveButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
   namePromptOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -1123,17 +1180,23 @@ const styles = StyleSheet.create({
   namePromptModal: {
     width: '100%',
     maxWidth: 400,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 12,
   },
   namePromptTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '800',
     marginBottom: 16,
+    letterSpacing: -0.3,
   },
   nameInput: {
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 13,
     fontSize: 16,
     borderWidth: 1,
     marginBottom: 20,
@@ -1144,8 +1207,8 @@ const styles = StyleSheet.create({
   },
   namePromptButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 13,
+    borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
   },
@@ -1153,12 +1216,13 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
   namePromptCancelText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
   namePromptSaveText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
+
