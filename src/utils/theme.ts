@@ -1,16 +1,34 @@
-export const lightTheme = {
-  // Accent
-  primary: '#7C5CFC',
-  primaryDark: '#5B3ED6',
-  primaryLight: '#A98DFD',
-  accent: '#7C5CFC',
-  accentMuted: '#7C5CFC18',
+// ─── Per-section accent palettes ────────────────────────────────────────────
+export const sectionAccents = {
+  Calories: {
+    primary:     '#3B82F6',
+    primaryDark: '#2563EB',
+    primaryLight: '#93C5FD',
+    accentMuted: '#3B82F622',
+  },
+  Library: {
+    primary:     '#F59E0B',
+    primaryDark: '#D97706',
+    primaryLight: '#FCD34D',
+    accentMuted: '#F59E0B22',
+  },
+  Workouts: {
+    primary:     '#EF4444',
+    primaryDark: '#DC2626',
+    primaryLight: '#FCA5A5',
+    accentMuted: '#EF444422',
+  },
+} as const;
 
+export type SectionKey = keyof typeof sectionAccents;
+
+// ─── Base themes (no accent tokens — injected at runtime by ThemeContext) ────
+export const lightThemeBase = {
   // Backgrounds
-  background: '#F4F3FF',
+  background: '#F8F8F8',
   surface: '#FFFFFF',
   card: '#FFFFFF',
-  cardBorder: '#EAE8FF',
+  cardBorder: '#EBEBEB',
 
   // Text
   text: '#0F0F14',
@@ -25,24 +43,16 @@ export const lightTheme = {
 
   // Tab bar
   tabBar: '#FFFFFF',
-  tabBarActive: '#7C5CFC',
-  tabBarInactive: '#9996B3',
+  tabBarInactive: '#BBBAC5',
 
   // Workout type colors
-  gym: '#7C5CFC',
+  gym: '#EF4444',
   cardio: '#F87171',
   calisthenics: '#10B981',
   stretching: '#FBBF24',
 };
 
-export const darkTheme = {
-  // Accent
-  primary: '#7C5CFC',
-  primaryDark: '#5B3ED6',
-  primaryLight: '#A98DFD',
-  accent: '#7C5CFC',
-  accentMuted: '#7C5CFC22',
-
+export const darkThemeBase = {
   // Backgrounds
   background: '#0F0F14',
   surface: '#1A1A22',
@@ -62,14 +72,21 @@ export const darkTheme = {
 
   // Tab bar
   tabBar: '#1A1A22',
-  tabBarActive: '#7C5CFC',
   tabBarInactive: '#5C5A72',
 
   // Workout type colors
-  gym: '#7C5CFC',
+  gym: '#EF4444',
   cardio: '#F87171',
   calisthenics: '#34D399',
   stretching: '#FBBF24',
 };
 
-export type Theme = typeof darkTheme;
+// Theme type is the base merged with accent tokens
+export type Theme = typeof darkThemeBase & {
+  primary: string;
+  primaryDark: string;
+  primaryLight: string;
+  accent: string;
+  accentMuted: string;
+  tabBarActive: string;
+};

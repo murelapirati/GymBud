@@ -1,11 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { lightTheme, darkTheme, Theme } from '../utils/theme';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import { lightThemeBase, darkThemeBase, sectionAccents, SectionKey, Theme } from '../utils/theme';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 
 type ThemeContextType = {
   theme: Theme;
   isDark: boolean;
   toggleTheme: () => void;
+  activeSection: SectionKey;
+  setActiveSection: (section: SectionKey) => void;
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -13,8 +15,8 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [isDark, setIsDark] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState<SectionKey>('Calories');
 
-  // Load theme preference on app start
   useEffect(() => {
     loadThemePreference();
   }, []);
@@ -42,15 +44,27 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const theme = isDark ? darkTheme : lightTheme;
+  // Merge base theme with the active section's accent tokens
+  const theme = useMemo<Theme>(() => {
+    const base = isDark ? darkThemeBase : lightThemeBase;
+    const accent = sectionAccents[activeSection];
+    return {
+      ...base,
+      primary:     accent.primary,
+      primaryDark: accent.primaryDark,
+      primaryLight: accent.primaryLight,
+      accent:      accent.primary,
+      accentMuted: accent.accentMuted,
+      tabBarActive: accent.primary,
+    };
+  }, [isDark, activeSection]);
 
-  // Don't render children until theme is loaded
   if (isLoading) {
     return null;
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, isDark, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, isDark, toggleTheme, activeSection, setActiveSection }}>
       {children}
     </ThemeContext.Provider>
   );

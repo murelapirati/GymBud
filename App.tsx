@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { SectionKey } from './src/utils/theme';
 import { ActiveWorkoutProvider, useActiveWorkout } from './src/context/ActiveWorkoutContext';
 import ActiveWorkoutStatusBar from './src/components/ActiveWorkoutStatusBar';
 import RestTimerStatusBar from './src/components/RestTimerStatusBar';
@@ -22,7 +23,7 @@ function MainApp() {
   const [showActiveWorkout, setShowActiveWorkout] = useState(false);
   const [showRestTimer, setShowRestTimer] = useState(false);
   const [collapsedExercises, setCollapsedExercises] = useState<Set<string>>(new Set());
-  const { theme } = useTheme();
+  const { theme, setActiveSection } = useTheme();
   const { 
     isWorkoutActive, 
     activeRestTimer, 
@@ -126,7 +127,7 @@ function MainApp() {
       {/* Rest Timer Completion Modal */}
       <Modal visible={restTimerCompleted} transparent={true} animationType="fade">
         <View style={styles.completionOverlay}>
-          <View style={[styles.completionContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={[styles.completionContent, { backgroundColor: theme.card, borderColor: theme.border, shadowColor: theme.primary }]}>
             <View style={[styles.completionIconContainer, { backgroundColor: theme.primary + '25' }]}>
               <Ionicons name="checkmark-circle" size={72} color={theme.primary} />
             </View>
@@ -159,7 +160,10 @@ function MainApp() {
               <TouchableOpacity
                 key={tab.key}
                 style={styles.tab}
-                onPress={() => setActiveScreen(tab.key)}
+                onPress={() => {
+                  setActiveScreen(tab.key);
+                  setActiveSection(tab.key as SectionKey);
+                }}
                 activeOpacity={0.7}
               >
                 <View style={[
@@ -257,7 +261,7 @@ const styles = StyleSheet.create({
     width: '88%',
     maxWidth: 360,
     borderWidth: 1,
-    shadowColor: '#7C5CFC',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
     shadowRadius: 24,
