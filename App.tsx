@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Modal } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { SectionKey } from './src/utils/theme';
 import { ActiveWorkoutProvider, useActiveWorkout } from './src/context/ActiveWorkoutContext';
+import { GlobalDateProvider } from './src/context/GlobalDateContext';
 import ActiveWorkoutStatusBar from './src/components/ActiveWorkoutStatusBar';
 import RestTimerStatusBar from './src/components/RestTimerStatusBar';
+import GlobalDateWarning from './src/components/GlobalDateWarning';
 import CaloriesScreen from './src/screens/CaloriesScreen';
 import LibraryScreen from './src/screens/LibraryScreen';
 import WorkoutsScreen from './src/screens/WorkoutsScreen';
@@ -146,6 +149,7 @@ function MainApp() {
       </Modal>
       
       <View style={styles.content}>
+        <GlobalDateWarning />
         {renderScreen()}
       </View>
       {!showSettings && !showGoals && !showWorkoutGoals && !showActiveWorkout && !showRestTimer && (
@@ -194,11 +198,15 @@ function MainApp() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <ActiveWorkoutProvider>
-        <MainApp />
-      </ActiveWorkoutProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <GlobalDateProvider>
+          <ActiveWorkoutProvider>
+            <MainApp />
+          </ActiveWorkoutProvider>
+        </GlobalDateProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
 

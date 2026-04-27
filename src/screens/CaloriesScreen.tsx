@@ -18,8 +18,11 @@ import {
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useActiveWorkout } from '../context/ActiveWorkoutContext';
+import { useGlobalDate } from '../context/GlobalDateContext';
 import { CircularProgress } from '../components/CircularProgress';
 import { storage, STORAGE_KEYS } from '../utils/storage';
+import { getTodayDate } from '../utils/date';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { ProductDetailsModal } from '../components/ProductDetailsModal';
 import { RecipeLogModal } from '../components/RecipeLogModal';
@@ -57,10 +60,7 @@ interface Goals {
   fatsPercent: number;
 }
 
-const getTodayDate = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-};
+
 
 // Small circular progress indicator for macros
 const MacroCircle = ({ progress, color }: { progress: number; color: string }) => {
@@ -181,7 +181,7 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fats, setFats] = useState('');
-  const [selectedDate, setSelectedDate] = useState<string>(getTodayDate());
+  const { selectedDate, setSelectedDate } = useGlobalDate();
   const [viewingMonth, setViewingMonth] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;

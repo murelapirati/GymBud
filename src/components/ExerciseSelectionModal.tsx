@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, TextInput, FlatList } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { storage, STORAGE_KEYS } from '../utils/storage';
@@ -15,6 +16,7 @@ interface ExerciseSelectionModalProps {
 
 export default function ExerciseSelectionModal({ visible, onClose, onSelect, workoutType }: ExerciseSelectionModalProps) {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [allExercises, setAllExercises] = useState<MappedExercise[]>([]);
 
@@ -97,7 +99,7 @@ export default function ExerciseSelectionModal({ visible, onClose, onSelect, wor
   if (!visible) return null;
 
   return (
-    <View style={[StyleSheet.absoluteFillObject, styles.overlay, { backgroundColor: theme.background }]}>
+    <View style={[StyleSheet.absoluteFillObject, styles.overlay, { backgroundColor: theme.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />

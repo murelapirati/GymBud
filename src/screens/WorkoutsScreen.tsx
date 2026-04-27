@@ -19,10 +19,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pedometer } from 'expo-sensors';
 import { useTheme } from '../context/ThemeContext';
 import { useActiveWorkout } from '../context/ActiveWorkoutContext';
+import { useGlobalDate } from '../context/GlobalDateContext';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 import { healthService } from '../utils/healthService';
 import { useMeasurementSystem } from '../hooks/useMeasurementSystem';
 import { convertWeightToStorage, convertWeightForDisplay } from '../utils/measurements';
+import { getTodayDate } from '../utils/date';
 import ActivityRings from '../components/ActivityRings';
 import MiniActivityRings from '../components/MiniActivityRings';
 import { ActivityRingsCard } from '../components/workout/ActivityRingsCard';
@@ -87,10 +89,7 @@ interface DailyActivityHistory {
   [date: string]: DailyActivityData;
 }
 
-const getTodayDate = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-};
+
 
 export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: WorkoutsScreenProps) {
   const { theme } = useTheme();
@@ -137,8 +136,8 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
   const [multiplierLoaded, setMultiplierLoaded] = useState(false);
   
   // Calendar state
+  const { selectedDate, setSelectedDate } = useGlobalDate();
   const now = new Date();
-  const [selectedDate, setSelectedDate] = useState<string>(getTodayDate());
   const [viewingMonth, setViewingMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
 
   useEffect(() => {
