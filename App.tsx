@@ -18,6 +18,8 @@ import RestTimerScreen from './src/screens/RestTimerScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import GoalsScreen from './src/screens/GoalsScreen';
 import WorkoutGoalsScreen from './src/screens/WorkoutGoalsScreen';
+import BodyMapScreen from './src/screens/BodyMapScreen';
+
 
 function MainApp() {
   const [activeScreen, setActiveScreen] = useState('Calories');
@@ -114,6 +116,11 @@ function MainApp() {
           onOpenSettings={() => setShowSettings(true)}
           onStartWorkout={() => setShowActiveWorkout(true)}
         />;
+      case 'Ranks':
+        return <BodyMapScreen 
+          onOpenSettings={() => setShowSettings(true)}
+        />;
+
       default:
         return <CaloriesScreen onOpenSettings={() => setShowSettings(true)} />;
     }
@@ -159,6 +166,7 @@ function MainApp() {
             { key: 'Calories', label: 'Nutrition', icon: 'flame' as const },
             { key: 'Library', label: 'Library', icon: 'library' as const },
             { key: 'Workouts', label: 'Workouts', icon: 'barbell' as const },
+            { key: 'Ranks', label: 'Ranks', icon: 'medal' as const },
           ].map(tab => {
             const isActive = activeScreen === tab.key;
             return (

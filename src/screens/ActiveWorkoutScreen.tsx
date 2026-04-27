@@ -62,6 +62,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
     startRestTimer,
     cancelRestTimer,
     finishExercise,
+    toggleSetWarmup,
   } = useActiveWorkout();
 
   const [exerciseName, setExerciseName] = useState('');
@@ -70,6 +71,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const [reps, setReps] = useState('');
   const [weight, setWeight] = useState('');
+  const [isWarmupSet, setIsWarmupSet] = useState(false);
   const [showRestPicker, setShowRestPicker] = useState(false);
   const [pendingExerciseId, setPendingExerciseId] = useState<string | null>(null);
   const [showFinishModal, setShowFinishModal] = useState(false);
@@ -173,11 +175,12 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
       const weightNum = weightInput ? convertWeightToStorage(weightInput, measurementSystem) : undefined;
       
       // Log the set with the selected rest time
-      const setId = logSet(pendingExerciseId, repsNum, weightNum, totalSeconds);
+      const setId = logSet(pendingExerciseId, repsNum, weightNum, totalSeconds, isWarmupSet);
       
       // Clear inputs
       setReps('');
       setWeight('');
+      setIsWarmupSet(false);
       
       // Start timer if rest time > 0
       if (totalSeconds > 0) {
@@ -201,11 +204,12 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
       const weightNum = weightInput ? convertWeightToStorage(weightInput, measurementSystem) : undefined;
       
       // Log the set with no rest time
-      logSet(pendingExerciseId, repsNum, weightNum, 0);
+      logSet(pendingExerciseId, repsNum, weightNum, 0, isWarmupSet);
       
       // Clear inputs
       setReps('');
       setWeight('');
+      setIsWarmupSet(false);
     }
     
     setPendingExerciseId(null);
@@ -837,8 +841,16 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                       return (
                         <View key={set.id} style={[styles.setRow, { borderColor: theme.border }]}>
                           <View style={styles.setLeftSection}>
-                            <View style={[styles.setNumberBadge, { backgroundColor: theme.primary + '18' }]}>
-                              <Text style={[styles.setNumberText, { color: theme.primary }]}>{index + 1}</Text>
+                            <View style={[
+                              styles.setNumberBadge, 
+                              { backgroundColor: (set as any).isWarmup ? '#F59E0B20' : theme.primary + '18' }
+                            ]}>
+                              <Text style={[
+                                styles.setNumberText, 
+                                { color: (set as any).isWarmup ? '#F59E0B' : theme.primary }
+                              ]}>
+                                {(set as any).isWarmup ? 'W' : index + 1}
+                              </Text>
                             </View>
                           </View>
                           <View style={styles.setMiddleSection}>
@@ -850,6 +862,9 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                             </Text>
                           </View>
                           <View style={styles.setActions}>
+                            <TouchableOpacity onPress={() => toggleSetWarmup(exercise.id, set.id)}>
+                              <Ionicons name="flame" size={16} color={(set as any).isWarmup ? '#F59E0B' : theme.textTertiary} />
+                            </TouchableOpacity>
                             <TouchableOpacity onPress={() => handleEditSet(exercise.id, set.id)}>
                               <Ionicons name="pencil" size={16} color={theme.primary} />
                             </TouchableOpacity>
@@ -897,6 +912,14 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                       />
                     </View>
                   </View>
+
+                  <TouchableOpacity 
+                    style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}
+                    onPress={() => setIsWarmupSet(!isWarmupSet)}
+                  >
+                    <Ionicons name={isWarmupSet ? "checkbox" : "square-outline"} size={20} color={isWarmupSet ? '#F59E0B' : theme.textSecondary} />
+                    <Text style={{ color: theme.textSecondary, fontSize: 14 }}>Mark as Warm-up</Text>
+                  </TouchableOpacity>
 
                   <View style={styles.logSetButtons}>
                     {editingSetId && (

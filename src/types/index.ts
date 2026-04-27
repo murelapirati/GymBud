@@ -169,7 +169,6 @@ export type MuscleGroup =
 export type RankTier = 
   | 'dirt' 
   | 'wood' 
-  | 'stone' 
   | 'iron' 
   | 'bronze' 
   | 'gold' 

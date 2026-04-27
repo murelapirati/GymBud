@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, SafeAreaView, Platform, Dimensions, NativeSyntheticEvent, NativeScrollEvent, Modal } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Body from 'react-native-body-highlighter';
 import { useTheme } from '../context/ThemeContext';
@@ -8,7 +8,7 @@ import { rankColors } from '../utils/theme';
 import { MuscleGroup, RankTier } from '../types';
 
 interface BodyMapScreenProps {
-  onBack: () => void;
+  onOpenSettings: () => void;
 }
 
 const { width } = Dimensions.get('window');
@@ -52,7 +52,7 @@ const MUSCLE_SLUG_MAPPING: Record<MuscleGroup, string> = {
 };
 
 const RANK_ORDER: RankTier[] = [
-  'dirt', 'wood', 'stone', 'iron', 'bronze', 
+  'dirt', 'wood', 'iron', 'bronze', 
   'gold', 'diamond', 'emerald', 'master', 'olympian'
 ];
 
@@ -63,15 +63,13 @@ const CATEGORIES = [
   { name: 'Lower Body', muscles: ['quads', 'hamstrings', 'glutes', 'calves'] as MuscleGroup[] },
 ];
 
-export default function BodyMapScreen({ onBack }: BodyMapScreenProps) {
+export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
   const { theme } = useTheme();
-  const { muscleStatuses, gender, setGender } = useBodyMap();
+  const { muscleStatuses, gender } = useBodyMap();
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
   const [showVisual, setShowVisual] = useState(true);
-  const [settingsVisible, setSettingsVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Prepare data for the highlighter
   const highlightedMuscles = Object.keys(MUSCLE_SLUG_MAPPING).map((m) => {
     const muscle = m as MuscleGroup;
     const status = muscleStatuses[muscle];
@@ -140,15 +138,12 @@ export default function BodyMapScreen({ onBack }: BodyMapScreenProps) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.text }]}>Body Map</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Ranks</Text>
         <View style={styles.headerRight}>
-          <TouchableOpacity onPress={() => setSettingsVisible(true)} style={styles.iconButton}>
-            <Ionicons name="settings-outline" size={24} color={theme.textSecondary} />
+          <TouchableOpacity onPress={onOpenSettings} style={styles.iconButton}>
+            <Ionicons name="settings-outline" size={24} color={theme.primary} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => setShowVisual(!showVisual)} style={styles.iconButton}>
             <Ionicons name={showVisual ? "list" : "body"} size={24} color={theme.primary} />
@@ -248,60 +243,7 @@ export default function BodyMapScreen({ onBack }: BodyMapScreenProps) {
           )}
         </View>
       </ScrollView>
-
-      {/* Settings Modal */}
-      <Modal
-        visible={settingsVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSettingsVisible(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={() => setSettingsVisible(false)}
-        >
-          <View style={[styles.settingsContent, { backgroundColor: theme.card }]}>
-            <Text style={[styles.settingsTitle, { color: theme.text }]}>Map Settings</Text>
-            
-            <View style={styles.settingsGroup}>
-              <Text style={[styles.settingsLabel, { color: theme.textSecondary }]}>Body Type</Text>
-              <View style={styles.toggleRow}>
-                <TouchableOpacity 
-                  onPress={() => setGender('male')}
-                  style={[
-                    styles.toggleBtn, 
-                    { borderColor: theme.border },
-                    gender === 'male' && { backgroundColor: theme.primary, borderColor: theme.primary }
-                  ]}
-                >
-                  <Ionicons name="male" size={18} color={gender === 'male' ? '#fff' : theme.textSecondary} />
-                  <Text style={[styles.toggleBtnText, { color: gender === 'male' ? '#fff' : theme.textSecondary }]}>Male</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  onPress={() => setGender('female')}
-                  style={[
-                    styles.toggleBtn, 
-                    { borderColor: theme.border },
-                    gender === 'female' && { backgroundColor: theme.primary, borderColor: theme.primary }
-                  ]}
-                >
-                  <Ionicons name="female" size={18} color={gender === 'female' ? '#fff' : theme.textSecondary} />
-                  <Text style={[styles.toggleBtnText, { color: gender === 'female' ? '#fff' : theme.textSecondary }]}>Female</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <TouchableOpacity 
-              onPress={() => setSettingsVisible(false)}
-              style={[styles.closeButton, { backgroundColor: theme.primary }]}
-            >
-              <Text style={styles.closeButtonText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -313,23 +255,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   headerRight: {
     flexDirection: 'row',
-    gap: 8,
-  },
-  backButton: {
-    padding: 8,
+    gap: 4,
   },
   iconButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mainScrollView: {
     flex: 1,
@@ -488,67 +432,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontStyle: 'italic',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  settingsContent: {
-    width: '100%',
-    maxWidth: 340,
-    borderRadius: 30,
-    padding: 24,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-  },
-  settingsTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  settingsGroup: {
-    marginBottom: 24,
-  },
-  settingsLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  toggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 8,
-  },
-  toggleBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  closeButton: {
-    paddingVertical: 16,
-    borderRadius: 18,
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '800',
   },
 });

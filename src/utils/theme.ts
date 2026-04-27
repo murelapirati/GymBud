@@ -18,6 +18,12 @@ export const sectionAccents = {
     primaryLight: '#FCA5A5',
     accentMuted: '#EF444422',
   },
+  Ranks: {
+    primary: '#8B5CF6',
+    primaryDark: '#7C3AED',
+    primaryLight: '#C4B5FD',
+    accentMuted: '#8B5CF622',
+  },
 } as const;
 
 export type SectionKey = keyof typeof sectionAccents;
@@ -94,7 +100,6 @@ export type Theme = typeof darkThemeBase & {
 export const rankColors = {
   dirt: '#8B4513',     // SaddleBrown
   wood: '#DEB887',     // BurlyWood
-  stone: '#A9A9A9',    // DarkGray
   iron: '#D3D3D3',     // LightGray (Shinier than stone)
   bronze: '#CD7F32',   // Bronze
   gold: '#FFD700',     // Gold

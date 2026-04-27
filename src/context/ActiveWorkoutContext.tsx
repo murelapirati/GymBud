@@ -15,16 +15,18 @@ interface GymSet {
   completed: boolean;
   completedAt?: Date;
   restTime?: number;
+  isWarmup?: boolean;
 }
 
 // Calisthenics: sets x reps + optional extra weight
 interface CalisthenicsSet {
   id: string;
   reps: number;
-  extraWeight?: number; // optional extra weight added
+  extraWeight?: number;
   completed: boolean;
   completedAt?: Date;
   restTime?: number;
+  isWarmup?: boolean;
 }
 
 // Cardio entry: duration, distance (optional), heart rate (optional)
@@ -94,9 +96,10 @@ interface ActiveWorkoutContextType {
   cancelWorkout: () => void;
   // Gym & Calisthenics
   addExercise: (name: string, restTimer: number) => void;
-  logSet: (exerciseId: string, reps: number, weight?: number, restTime?: number) => string;
+  logSet: (exerciseId: string, reps: number, weight?: number, restTime?: number, isWarmup?: boolean) => string;
   updateSet: (exerciseId: string, setId: string, reps: number, weight?: number) => void;
   deleteSet: (exerciseId: string, setId: string) => void;
+  toggleSetWarmup: (exerciseId: string, setId: string) => void;
   // Cardio & Stretching
   addCardioActivity: (name: string) => void;
   startCardioTimer: (id: string) => void;
@@ -441,7 +444,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     setExercises(prev => [...prev, newExercise]);
   };
 
-  const logSet = (exerciseId: string, reps: number, weight?: number, restTime?: number) => {
+  const logSet = (exerciseId: string, reps: number, weight?: number, restTime?: number, isWarmup?: boolean) => {
     const setId = Date.now().toString();
     setExercises(prev => prev.map(ex => {
       if (ex.id === exerciseId) {
@@ -453,6 +456,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
               completed: true,
               completedAt: new Date(),
               restTime,
+              isWarmup: isWarmup || false,
             }
           : {
               id: setId,
@@ -461,12 +465,27 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
               completed: true,
               completedAt: new Date(),
               restTime,
+              isWarmup: isWarmup || false,
             };
         return { ...ex, sets: [...(ex.sets || []), newSet] };
       }
       return ex;
     }));
     return setId;
+  };
+
+  const toggleSetWarmup = (exerciseId: string, setId: string) => {
+    setExercises(prev => prev.map(ex => {
+      if (ex.id === exerciseId && ex.sets) {
+        return {
+          ...ex,
+          sets: ex.sets.map(s =>
+            s.id === setId ? { ...s, isWarmup: !s.isWarmup } : s
+          ),
+        };
+      }
+      return ex;
+    }));
   };
 
   const updateSet = (exerciseId: string, setId: string, reps: number, weight?: number) => {
@@ -728,6 +747,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
         logSet,
         updateSet,
         deleteSet,
+        toggleSetWarmup,
         deleteExercise,
         moveExercise,
         addCardioActivity,

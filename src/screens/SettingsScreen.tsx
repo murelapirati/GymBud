@@ -5,6 +5,8 @@ import { useTheme } from '../context/ThemeContext';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 import type { MeasurementSystem } from '../utils/measurements';
 import CustomExercisesModal from '../components/CustomExercisesModal';
+import { useBodyMap } from '../context/BodyMapContext';
+
 
 interface Goals {
   calories: number;
@@ -26,6 +28,8 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
   const [measurementSystem, setMeasurementSystem] = useState<MeasurementSystem>('imperial');
   const [promptSaveTemplate, setPromptSaveTemplate] = useState(false);
   const [showCustomExercises, setShowCustomExercises] = useState(false);
+  const { gender, setGender, refreshRanks } = useBodyMap();
+
 
   useEffect(() => {
     loadStepMultiplier();
@@ -129,6 +133,11 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
           onPress: () => confirmClearData('calories'),
         },
         {
+          text: 'Clear Body Map Only',
+          style: 'destructive',
+          onPress: () => confirmClearData('bodymap'),
+        },
+        {
           text: 'Clear All Data',
           style: 'destructive',
           onPress: () => confirmClearData('all'),
@@ -138,10 +147,11 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
     );
   };
 
-  const confirmClearData = (type: 'workouts' | 'calories' | 'all') => {
+  const confirmClearData = (type: 'workouts' | 'calories' | 'bodymap' | 'all') => {
     const messages = {
       workouts: 'This will delete all workout history and activity data. This action cannot be undone.',
       calories: 'This will delete all calorie tracking data. This action cannot be undone.',
+      bodymap: 'This will reset all muscle ranks and scores back to Dirt. This action cannot be undone.',
       all: 'This will delete ALL app data including workouts, calories, goals, and settings. This action cannot be undone.',
     };
 
@@ -163,7 +173,7 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
     );
   };
 
-  const clearData = async (type: 'workouts' | 'calories' | 'all') => {
+  const clearData = async (type: 'workouts' | 'calories' | 'bodymap' | 'all') => {
     try {
       if (type === 'workouts' || type === 'all') {
         await storage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, {});
@@ -173,6 +183,11 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
       
       if (type === 'calories' || type === 'all') {
         await storage.setItem(STORAGE_KEYS.CALORIES, { date: new Date().toISOString().split('T')[0], items: [] });
+      }
+      
+      if (type === 'bodymap' || type === 'all') {
+        await storage.setItem(STORAGE_KEYS.MUSCLE_STATUS, {});
+        await refreshRanks();
       }
       
       if (type === 'all') {
@@ -193,7 +208,7 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
 
       Alert.alert(
         'Success',
-        'Data cleared successfully. Please restart the app to see changes.',
+        type === 'bodymap' ? 'Body map data cleared successfully.' : 'Data cleared successfully. Please restart the app to see all changes.',
         [{ text: 'OK' }]
       );
     } catch (error) {
@@ -232,7 +247,7 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
               <View style={[styles.settingIconBg, { backgroundColor: '#7C5CFC22' }]}>
                 <Ionicons name="restaurant-outline" size={20} color={theme.primary} />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={[styles.settingTitle, { color: theme.text }]}>Calorie & Macro Goals</Text>
                 <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
                   Set targets and manage presets
@@ -324,6 +339,37 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
             />
           </View>
         </View>
+        <View style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.settingRow}>
+            <View>
+              <Text style={[styles.settingTitle, { color: theme.text }]}>Body Map Type</Text>
+              <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                {gender === 'male' ? 'Male silhouette' : 'Female silhouette'}
+              </Text>
+            </View>
+            <View style={styles.genderToggleContainer}>
+              <TouchableOpacity 
+                onPress={() => setGender('male')}
+                style={[
+                  styles.genderOption, 
+                  gender === 'male' && { backgroundColor: theme.primary, borderColor: theme.primary }
+                ]}
+              >
+                <Ionicons name="male" size={16} color={gender === 'male' ? '#fff' : theme.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => setGender('female')}
+                style={[
+                  styles.genderOption, 
+                  gender === 'female' && { backgroundColor: theme.primary, borderColor: theme.primary }
+                ]}
+              >
+                <Ionicons name="female" size={16} color={gender === 'female' ? '#fff' : theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>Data & Tracking</Text>
         <View style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -390,10 +436,10 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
               <View style={[styles.settingIconBg, { backgroundColor: '#F8717122' }]}>
                 <Ionicons name="trash-outline" size={20} color="#F87171" />
               </View>
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={[styles.settingTitle, { color: '#F87171' }]}>Clear App Data</Text>
                 <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
-                  Delete workouts, calories, or all data
+                  Delete workouts, calories, body map, or all data
                 </Text>
               </View>
             </View>
@@ -516,6 +562,22 @@ const styles = StyleSheet.create({
   saveOffsetButtonText: {
     fontSize: 15,
     fontWeight: '700',
+  },
+  genderToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    padding: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  genderOption: {
+    width: 40,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
 });
 

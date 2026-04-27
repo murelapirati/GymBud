@@ -3,11 +3,11 @@ import { PREDEFINED_EXERCISES } from '../data/exercises';
 import { getTodayDate } from './date';
 
 // Baseline thresholds for a "Standard" muscle group (e.g. Chest)
-// Ranks: Dirt, Wood, Stone, Iron, Bronze, Gold, Diamond, Platinum, Master, Olympian
-const BASE_THRESHOLDS: number[] = [0, 15, 30, 45, 60, 75, 95, 115, 135, 155];
+// Ranks: Dirt, Wood, Iron, Bronze, Gold, Diamond, Emerald, Master, Olympian
+const BASE_THRESHOLDS: number[] = [0, 20, 40, 60, 80, 100, 125, 150, 175];
 
 const RANK_ORDER: RankTier[] = [
-  'dirt', 'wood', 'stone', 'iron', 'bronze', 
+  'dirt', 'wood', 'iron', 'bronze', 
   'gold', 'diamond', 'emerald', 'master', 'olympian'
 ];
 
@@ -82,7 +82,7 @@ export const processWorkoutForRanks = (
     if (mapping.type === 'gym') {
       const gymEx = ex as unknown as GymExercise;
       gymEx.sets.forEach(set => {
-        if (set.completed && set.weight) {
+        if (set.completed && set.weight && !(set as any).isWarmup) {
           const oneRM = calculate1RM(set.weight, set.reps);
           const score = oneRM * multiplier * intensityFactor;
           if (score > maxExerciseScore) maxExerciseScore = score;
@@ -90,11 +90,9 @@ export const processWorkoutForRanks = (
       });
     } else if (mapping.type === 'calisthenics') {
       const caliEx = ex as unknown as CalisthenicsExercise;
-      // For calisthenics, we assume a baseline weight of 70kg for calculations
-      // plus any extra weight added.
       const BASE_BODYWEIGHT = 70;
       caliEx.sets.forEach(set => {
-        if (set.completed) {
+        if (set.completed && !(set as any).isWarmup) {
           const effectiveWeight = BASE_BODYWEIGHT + (set.extraWeight || 0);
           const oneRM = calculate1RM(effectiveWeight, set.reps);
           const score = oneRM * multiplier * intensityFactor;

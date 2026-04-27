@@ -265,11 +265,15 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
     loadAllData();
   }, [selectedDate]);
 
+  const skipInitialSave = useRef(true);
+
   // Save entries whenever they change
   useEffect(() => {
-    if (entries.length > 0) {
-      saveEntries();
+    if (skipInitialSave.current) {
+      skipInitialSave.current = false;
+      return;
     }
+    saveEntries();
   }, [entries]);
 
   const loadProductCache = async () => {
@@ -501,7 +505,7 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.surface }]}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Full-screen loading overlay while barcode API call is in progress */}
       {isLoadingProduct && (
         <View style={[styles.loadingOverlay, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
@@ -512,9 +516,8 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
           </View>
         </View>
       )}
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.text }]}>Calorie Tracker</Text>
+      <View style={styles.header}>
+          <Text style={[styles.title, { color: theme.text }]}>Nutrition</Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity onPress={() => setShowHistoryModal(true)} style={styles.settingsButton}>
               <Ionicons name="calendar-outline" size={24} color={theme.primary} />
@@ -932,7 +935,6 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
         onClose={() => { setShowRecipeLogModal(false); setSelectedRecipe(null); }}
         onLog={handleLogRecipe}
       />
-      </SafeAreaView>
     </View>
   );
 }
@@ -975,10 +977,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 4,
+    paddingBottom: 16,
   },
   title: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
     letterSpacing: -0.5,
   },

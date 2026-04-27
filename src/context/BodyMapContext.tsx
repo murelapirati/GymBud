@@ -10,6 +10,7 @@ interface BodyMapContextType {
   gender: BodyGender;
   setGender: (gender: BodyGender) => Promise<void>;
   updateRanksFromWorkout: (workout: Workout) => Promise<void>;
+  refreshRanks: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -28,30 +29,37 @@ export const BodyMapProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [gender, setGenderState] = useState<BodyGender>('male');
   const [isLoading, setIsLoading] = useState(true);
 
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const storedStatuses = await storage.getItem<Record<MuscleGroup, MuscleStatus>>(STORAGE_KEYS.MUSCLE_STATUS);
+      if (storedStatuses) {
+        const decayed = applyDecay(storedStatuses);
+        setMuscleStatuses(decayed);
+        await storage.setItem(STORAGE_KEYS.MUSCLE_STATUS, decayed);
+      } else {
+        setMuscleStatuses({} as any);
+      }
+
+      const storedGender = await storage.getItem<BodyGender>(STORAGE_KEYS.BODY_GENDER);
+      if (storedGender) {
+        setGenderState(storedGender);
+      }
+    } catch (error) {
+      console.error('Error loading body map data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Load status and gender preference on mount
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const storedStatuses = await storage.getItem<Record<MuscleGroup, MuscleStatus>>(STORAGE_KEYS.MUSCLE_STATUS);
-        if (storedStatuses) {
-          const decayed = applyDecay(storedStatuses);
-          setMuscleStatuses(decayed);
-          await storage.setItem(STORAGE_KEYS.MUSCLE_STATUS, decayed);
-        }
-
-        const storedGender = await storage.getItem<BodyGender>(STORAGE_KEYS.BODY_GENDER);
-        if (storedGender) {
-          setGenderState(storedGender);
-        }
-      } catch (error) {
-        console.error('Error loading body map data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadData();
   }, []);
+
+  const refreshRanks = async () => {
+    await loadData();
+  };
 
   const setGender = async (newGender: BodyGender) => {
     setGenderState(newGender);
@@ -70,7 +78,7 @@ export const BodyMapProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   return (
-    <BodyMapContext.Provider value={{ muscleStatuses, gender, setGender, updateRanksFromWorkout, isLoading }}>
+    <BodyMapContext.Provider value={{ muscleStatuses, gender, setGender, updateRanksFromWorkout, refreshRanks, isLoading }}>
       {children}
     </BodyMapContext.Provider>
   );
