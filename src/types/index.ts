@@ -147,6 +147,33 @@ export interface Workout {
   intensity?: number;
 }
 
+// Muscle & Body Map Types
+export type MuscleGroup = 
+  | 'chest' 
+  | 'lats' 
+  | 'upper_back' 
+  | 'lower_back'
+  | 'front_delts'
+  | 'side_delts'
+  | 'rear_delts'
+  | 'biceps'
+  | 'triceps'
+  | 'forearms'
+  | 'abs'
+  | 'obliques'
+  | 'quads'
+  | 'hamstrings'
+  | 'glutes'
+  | 'calves';
+
+export interface MappedExercise {
+  id: string;
+  name: string;
+  type: 'gym' | 'calisthenics' | 'cardio' | 'stretching';
+  primaryMuscles: MuscleGroup[];
+  secondaryMuscles: MuscleGroup[];
+}
+
 // Workout Template types
 export interface WorkoutTemplate {
   id: string;
