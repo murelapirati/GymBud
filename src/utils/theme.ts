@@ -1,19 +1,19 @@
 // ─── Per-section accent palettes ────────────────────────────────────────────
 export const sectionAccents = {
   Calories: {
-    primary:     '#3B82F6',
+    primary: '#3B82F6',
     primaryDark: '#2563EB',
     primaryLight: '#93C5FD',
     accentMuted: '#3B82F622',
   },
   Library: {
-    primary:     '#F59E0B',
+    primary: '#F59E0B',
     primaryDark: '#D97706',
     primaryLight: '#FCD34D',
     accentMuted: '#F59E0B22',
   },
   Workouts: {
-    primary:     '#EF4444',
+    primary: '#EF4444',
     primaryDark: '#DC2626',
     primaryLight: '#FCA5A5',
     accentMuted: '#EF444422',
@@ -90,3 +90,16 @@ export type Theme = typeof darkThemeBase & {
   accentMuted: string;
   tabBarActive: string;
 };
+
+export const rankColors = {
+  dirt: '#8B4513',     // SaddleBrown
+  wood: '#DEB887',     // BurlyWood
+  stone: '#A9A9A9',    // DarkGray
+  iron: '#D3D3D3',     // LightGray (Shinier than stone)
+  bronze: '#CD7F32',   // Bronze
+  gold: '#FFD700',     // Gold
+  diamond: '#106efaff',  // DeepSkyBlue (More vibrant)
+  emerald: '#40e00fff', // Emerald
+  master: '#e90606ff',   // Red
+  olympian: '#aff3f8ff', // Holy Blue
+} as const;

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Vibration, Alert } from 'react-native';
 import { storage, STORAGE_KEYS } from '../utils/storage';
-import { WorkoutTemplate, TemplateExercise } from '../types';
+import { WorkoutTemplate, TemplateExercise, Workout } from '../types';
+import { useBodyMap } from './BodyMapContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type WorkoutType = 'gym' | 'cardio' | 'calisthenics' | 'stretching';
@@ -148,6 +149,8 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
   const [stretchTimerEndTime, setStretchTimerEndTime] = useState<Date | null>(null);
   const [stretchTimerCompleted, setStretchTimerCompleted] = useState(false);
   const [activeStretchId, setActiveStretchId] = useState<string | null>(null);
+  
+  const { updateRanksFromWorkout } = useBodyMap();
 
   // Update workout duration every second
   useEffect(() => {
@@ -370,6 +373,9 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
         startTime: workoutStartTime.getTime(),
         endTime: endTime.getTime(),
       };
+
+      // Update Muscle Ranks
+      await updateRanksFromWorkout(workoutSession as any as Workout);
 
       // Save to workout history
       const history = await storage.getItem<any>(STORAGE_KEYS.WORKOUT_HISTORY) || {};

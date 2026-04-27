@@ -6,6 +6,7 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { SectionKey } from './src/utils/theme';
 import { ActiveWorkoutProvider, useActiveWorkout } from './src/context/ActiveWorkoutContext';
 import { GlobalDateProvider } from './src/context/GlobalDateContext';
+import { BodyMapProvider } from './src/context/BodyMapContext';
 import ActiveWorkoutStatusBar from './src/components/ActiveWorkoutStatusBar';
 import RestTimerStatusBar from './src/components/RestTimerStatusBar';
 import GlobalDateWarning from './src/components/GlobalDateWarning';
@@ -201,9 +202,11 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <GlobalDateProvider>
-          <ActiveWorkoutProvider>
-            <MainApp />
-          </ActiveWorkoutProvider>
+          <BodyMapProvider>
+            <ActiveWorkoutProvider>
+              <MainApp />
+            </ActiveWorkoutProvider>
+          </BodyMapProvider>
         </GlobalDateProvider>
       </ThemeProvider>
     </SafeAreaProvider>

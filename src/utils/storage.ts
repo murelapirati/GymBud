@@ -19,6 +19,8 @@ export const STORAGE_KEYS = {
   PRODUCT_CACHE: '@gymapp_product_cache',
   LIBRARY_COLLAPSED_SECTIONS: '@gymapp_library_collapsed_sections',
   CUSTOM_EXERCISES: '@gymapp_custom_exercises',
+  MUSCLE_STATUS: '@gymapp_muscle_status',
+  BODY_GENDER: '@gymapp_body_gender',
 } as const;
 
 // Generic storage functions

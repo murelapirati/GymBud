@@ -144,7 +144,7 @@ export interface Workout {
   duration?: number; // in minutes
   notes?: string;
   createdAt: number;
-  intensity?: number;
+  intensity?: number; // RPE 0-10
 }
 
 // Muscle & Body Map Types
@@ -166,12 +166,33 @@ export type MuscleGroup =
   | 'glutes'
   | 'calves';
 
+export type RankTier = 
+  | 'dirt' 
+  | 'wood' 
+  | 'stone' 
+  | 'iron' 
+  | 'bronze' 
+  | 'gold' 
+  | 'diamond' 
+  | 'emerald' 
+  | 'master' 
+  | 'olympian';
+
+export interface MuscleStatus {
+  muscle: MuscleGroup;
+  currentScore: number;
+  bestScore: number;
+  rank: RankTier;
+  lastTrained: string; // YYYY-MM-DD
+}
+
 export interface MappedExercise {
   id: string;
   name: string;
   type: 'gym' | 'calisthenics' | 'cardio' | 'stretching';
   primaryMuscles: MuscleGroup[];
   secondaryMuscles: MuscleGroup[];
+  difficultyMultiplier: number; // 1.0 is standard (e.g. flat bench)
 }
 
 // Workout Template types

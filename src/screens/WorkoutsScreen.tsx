@@ -28,6 +28,7 @@ import { getTodayDate } from '../utils/date';
 import ActivityRings from '../components/ActivityRings';
 import MiniActivityRings from '../components/MiniActivityRings';
 import { ActivityRingsCard } from '../components/workout/ActivityRingsCard';
+import BodyMapScreen from './BodyMapScreen';
 import { StepCounterCard } from '../components/workout/StepCounterCard';
 import { WorkoutCard } from '../components/workout/WorkoutCard';
 import { EditNotesModal } from '../components/workout/EditNotesModal';
@@ -102,6 +103,7 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
   const [showTemplateSelectionModal, setShowTemplateSelectionModal] = useState(false);
   const [selectedWorkoutType, setSelectedWorkoutType] = useState<WorkoutType | null>(null);
   const [showAddWorkoutModal, setShowAddWorkoutModal] = useState(false);
+  const [showBodyMap, setShowBodyMap] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState(false);
@@ -1089,6 +1091,20 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
           />
         )}
 
+        <TouchableOpacity 
+          style={[styles.bodyMapButton, { backgroundColor: theme.card, borderColor: theme.border }]}
+          onPress={() => setShowBodyMap(true)}
+        >
+          <View style={[styles.bodyMapIconContainer, { backgroundColor: theme.primary + '15' }]}>
+            <Ionicons name="body-outline" size={20} color={theme.primary} />
+          </View>
+          <View style={styles.bodyMapTextContainer}>
+            <Text style={[styles.bodyMapTitle, { color: theme.text }]}>Body Map & Ranks</Text>
+            <Text style={[styles.bodyMapSubtitle, { color: theme.textSecondary }]}>View your muscle tiers & PRs</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
+        </TouchableOpacity>
+
         {/* Back to Today button */}
         {!isToday && (
           <TouchableOpacity
@@ -1159,6 +1175,10 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
         onClose={handleCloseTemplateSelection}
         onSelectTemplate={handleSelectTemplate}
       />
+
+      <Modal visible={showBodyMap} animationType="slide">
+        <BodyMapScreen onBack={() => setShowBodyMap(false)} />
+      </Modal>
 
       {/* Edit Notes Modal */}
       <EditNotesModal
@@ -1464,5 +1484,33 @@ const styles = StyleSheet.create({
   },
   dayDetailContent: {
     paddingBottom: 20,
+  },
+  bodyMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  bodyMapIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  bodyMapTextContainer: {
+    flex: 1,
+  },
+  bodyMapTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  bodyMapSubtitle: {
+    fontSize: 13,
   },
 });

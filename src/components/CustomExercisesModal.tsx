@@ -33,12 +33,22 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
   const { theme } = useTheme();
   const [exercises, setExercises] = useState<MappedExercise[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
 
   // Form State
   const [name, setName] = useState('');
   const [type, setType] = useState<'gym' | 'calisthenics' | 'cardio' | 'stretching'>('gym');
   const [primaryMuscles, setPrimaryMuscles] = useState<Set<MuscleGroup>>(new Set());
   const [secondaryMuscles, setSecondaryMuscles] = useState<Set<MuscleGroup>>(new Set());
+  const [difficultyMultiplier, setDifficultyMultiplier] = useState(1.0);
+
+  const DIFFICULTY_PRESETS = [
+    { label: 'Standard Lift', value: 1.0, description: 'Matches Bench Press / Squat' },
+    { label: 'Heavy Compound', value: 1.2, description: 'Harder than standard (e.g. Deadlift)' },
+    { label: 'Assistance Lift', value: 0.8, description: 'Dumbbell work / Machine rows' },
+    { label: 'Accessory / Isolation', value: 0.4, description: 'Curls / Extensions / Flyes' },
+    { label: 'Bodyweight', value: 0.6, description: 'Pushups / Dips' },
+  ];
 
   useEffect(() => {
     if (visible) {
@@ -80,7 +90,6 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
       }
     ]);
   };
-
   const handleSaveExercise = () => {
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter an exercise name.');
@@ -91,22 +100,39 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
       return;
     }
 
-    const newExercise: MappedExercise = {
-      id: `custom_${Date.now()}`,
+    const exerciseData: MappedExercise = {
+      id: editingExerciseId || `custom_${Date.now()}`,
       name: name.trim(),
       type,
       primaryMuscles: Array.from(primaryMuscles),
       secondaryMuscles: Array.from(secondaryMuscles),
+      difficultyMultiplier,
     };
 
-    saveExercises([...exercises, newExercise]);
+    if (editingExerciseId) {
+      saveExercises(exercises.map(ex => ex.id === editingExerciseId ? exerciseData : ex));
+    } else {
+      saveExercises([...exercises, exerciseData]);
+    }
     
     // Reset form
     setName('');
     setType('gym');
     setPrimaryMuscles(new Set());
     setSecondaryMuscles(new Set());
+    setDifficultyMultiplier(1.0);
+    setEditingExerciseId(null);
     setShowAddForm(false);
+  };
+
+  const handleEdit = (ex: MappedExercise) => {
+    setName(ex.name);
+    setType(ex.type as any);
+    setPrimaryMuscles(new Set(ex.primaryMuscles));
+    setSecondaryMuscles(new Set(ex.secondaryMuscles));
+    setDifficultyMultiplier(ex.difficultyMultiplier || 1.0);
+    setEditingExerciseId(ex.id);
+    setShowAddForm(true);
   };
 
   const toggleMuscle = (muscle: MuscleGroup, isPrimary: boolean) => {
@@ -176,10 +202,22 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={theme.text} />
+          <TouchableOpacity onPress={() => {
+            if (showAddForm) {
+              setShowAddForm(false);
+              setEditingExerciseId(null);
+              setName('');
+              setPrimaryMuscles(new Set());
+              setSecondaryMuscles(new Set());
+            } else {
+              onClose();
+            }
+          }} style={styles.closeButton}>
+            <Ionicons name={showAddForm ? "arrow-back" : "close"} size={24} color={theme.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Custom Exercises</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>
+            {showAddForm ? (editingExerciseId ? 'Edit Exercise' : 'New Exercise') : 'Custom Exercises'}
+          </Text>
           <TouchableOpacity 
             onPress={() => setShowAddForm(!showAddForm)} 
             style={styles.addButton}
@@ -230,11 +268,41 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
               <Text style={[styles.helpText, { color: theme.textSecondary }]}>Select any secondary or stabilizing muscles.</Text>
               {renderMuscleChips(false)}
 
+              <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>Difficulty Profile</Text>
+              <Text style={[styles.helpText, { color: theme.textSecondary }]}>How does this exercise compare to a standard barbell lift?</Text>
+              <View style={styles.difficultyContainer}>
+                {DIFFICULTY_PRESETS.map((preset) => (
+                  <TouchableOpacity
+                    key={preset.value}
+                    style={[
+                      styles.difficultyOption,
+                      { 
+                        backgroundColor: difficultyMultiplier === preset.value ? theme.primary + '15' : theme.surface,
+                        borderColor: difficultyMultiplier === preset.value ? theme.primary : theme.border
+                      }
+                    ]}
+                    onPress={() => setDifficultyMultiplier(preset.value)}
+                  >
+                    <View style={styles.difficultyHeader}>
+                      <Text style={[styles.difficultyLabel, { color: theme.text }]}>{preset.label}</Text>
+                      {difficultyMultiplier === preset.value && (
+                        <Ionicons name="checkmark-circle" size={20} color={theme.primary} />
+                      )}
+                    </View>
+                    <Text style={[styles.difficultyDescription, { color: theme.textSecondary }]}>
+                      {preset.description}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               <TouchableOpacity
                 style={[styles.saveButton, { backgroundColor: theme.primary }]}
                 onPress={handleSaveExercise}
               >
-                <Text style={styles.saveButtonText}>Save Custom Exercise</Text>
+                <Text style={styles.saveButtonText}>
+                  {editingExerciseId ? 'Update Exercise' : 'Save Custom Exercise'}
+                </Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -251,13 +319,18 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
                   <View key={ex.id} style={[styles.exerciseCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <View style={styles.exerciseInfo}>
                       <Text style={[styles.exerciseName, { color: theme.text }]}>{ex.name}</Text>
-                      <Text style={[styles.exerciseType, { color: theme.textSecondary }]}>
+                       <Text style={[styles.exerciseType, { color: theme.textSecondary }]}>
                         {ex.type} • {ex.primaryMuscles.map(m => MUSCLE_GROUPS.find(g => g.id === m)?.label).join(', ')}
                       </Text>
                     </View>
-                    <TouchableOpacity onPress={() => handleDelete(ex.id)} style={styles.deleteButton}>
-                      <Ionicons name="trash-outline" size={20} color={theme.error} />
-                    </TouchableOpacity>
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity onPress={() => handleEdit(ex)} style={styles.actionButton}>
+                        <Ionicons name="pencil-outline" size={20} color={theme.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDelete(ex.id)} style={styles.actionButton}>
+                        <Ionicons name="trash-outline" size={20} color={theme.error} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 ))
               )}
@@ -377,8 +450,14 @@ const styles = StyleSheet.create({
   exerciseType: {
     fontSize: 13,
   },
-  deleteButton: {
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
     padding: 8,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderRadius: 8,
   },
   emptyState: {
     alignItems: 'center',
@@ -390,5 +469,26 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 15,
     lineHeight: 22,
+  },
+  difficultyContainer: {
+    gap: 10,
+  },
+  difficultyOption: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  difficultyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  difficultyLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  difficultyDescription: {
+    fontSize: 12,
   },
 });
