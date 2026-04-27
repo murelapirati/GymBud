@@ -21,6 +21,7 @@ import { useMeasurementSystem } from '../hooks/useMeasurementSystem';
 import { formatWeight, getWeightLabel, convertWeightToStorage, convertWeightForDisplay } from '../utils/measurements';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 import type { WorkoutTemplate, TemplateExercise } from '../types';
+import ExerciseSelectionModal from '../components/ExerciseSelectionModal';
 
 interface ActiveWorkoutScreenProps {
   onBack: () => void;
@@ -64,6 +65,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
   } = useActiveWorkout();
 
   const [exerciseName, setExerciseName] = useState('');
+  const [showExerciseSelection, setShowExerciseSelection] = useState(false);
   const [activeExerciseId, setActiveExerciseId] = useState<string | null>(null);
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const [reps, setReps] = useState('');
@@ -454,13 +456,14 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                 Add Exercise
               </Text>
               
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                placeholder="Exercise name"
-                placeholderTextColor={theme.textSecondary}
-                value={exerciseName}
-                onChangeText={setExerciseName}
-              />
+              <TouchableOpacity
+                style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, justifyContent: 'center' }]}
+                onPress={() => setShowExerciseSelection(true)}
+              >
+                <Text style={{ color: exerciseName ? theme.text : theme.textSecondary, fontSize: 16 }}>
+                  {exerciseName || 'Select Exercise...'}
+                </Text>
+              </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.addButton, { backgroundColor: theme.primary }]}
@@ -476,13 +479,14 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                 Add Cardio Activity
               </Text>
               
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                placeholder="Activity name (e.g., Running, Cycling)"
-                placeholderTextColor={theme.textSecondary}
-                value={exerciseName}
-                onChangeText={setExerciseName}
-              />
+              <TouchableOpacity
+                style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, justifyContent: 'center' }]}
+                onPress={() => setShowExerciseSelection(true)}
+              >
+                <Text style={{ color: exerciseName ? theme.text : theme.textSecondary, fontSize: 16 }}>
+                  {exerciseName || 'Select Activity (e.g. Running)...'}
+                </Text>
+              </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.addButton, { backgroundColor: theme.primary }]}
@@ -498,13 +502,14 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                 Add Stretching/Pilates Exercise
               </Text>
               
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                placeholder="Exercise name (e.g., Hamstring Stretch)"
-                placeholderTextColor={theme.textSecondary}
-                value={exerciseName}
-                onChangeText={setExerciseName}
-              />
+              <TouchableOpacity
+                style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, justifyContent: 'center' }]}
+                onPress={() => setShowExerciseSelection(true)}
+              >
+                <Text style={{ color: exerciseName ? theme.text : theme.textSecondary, fontSize: 16 }}>
+                  {exerciseName || 'Select Stretching Exercise...'}
+                </Text>
+              </TouchableOpacity>
 
               <View style={styles.inputColumn}>
                 <Text style={[styles.inputLabel, { color: theme.text }]}>Duration (minutes)*</Text>
@@ -1155,6 +1160,15 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ExerciseSelectionModal
+        visible={showExerciseSelection}
+        onClose={() => setShowExerciseSelection(false)}
+        workoutType={workoutType as any}
+        onSelect={(exercise) => {
+          setExerciseName(exercise.name);
+        }}
+      />
     </View>
   );
 };

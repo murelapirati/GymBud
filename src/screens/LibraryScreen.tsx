@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 import type { WorkoutTemplate, WorkoutType, TemplateExercise, Recipe } from '../types';
 import RecipeEditScreen from './RecipeEditScreen';
+import ExerciseSelectionModal from '../components/ExerciseSelectionModal';
 
 type TabType = 'templates' | 'recipes';
 
@@ -39,6 +40,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   const [newExercises, setNewExercises] = useState<TemplateExercise[]>([]);
   const [showTypeSelector, setShowTypeSelector] = useState(true);
   const [currentExerciseName, setCurrentExerciseName] = useState('');
+  const [showExerciseSelection, setShowExerciseSelection] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<WorkoutTemplate | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Set<WorkoutType>>(new Set());
@@ -650,15 +652,14 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                   )}
 
                   <View style={styles.addExerciseSection}>
-                    <TextInput
-                      style={[styles.exerciseNameInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                      placeholder="Exercise name"
-                      placeholderTextColor={theme.textSecondary}
-                      value={currentExerciseName}
-                      onChangeText={setCurrentExerciseName}
-                      onSubmitEditing={addExercise}
-                      returnKeyType="done"
-                    />
+                    <TouchableOpacity
+                      style={[styles.exerciseNameInput, { backgroundColor: theme.surface, borderColor: theme.border, justifyContent: 'center' }]}
+                      onPress={() => setShowExerciseSelection(true)}
+                    >
+                      <Text style={{ color: currentExerciseName ? theme.text : theme.textSecondary, fontSize: 16 }}>
+                        {currentExerciseName || 'Select Exercise...'}
+                      </Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.addButton, { backgroundColor: theme.primary }]}
                       onPress={addExercise}
@@ -731,6 +732,16 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
             </View>
           </View>
         </KeyboardAvoidingView>
+
+        {/* Exercise selection overlay – lives inside the Modal so absoluteFill covers it */}
+        <ExerciseSelectionModal
+          visible={showExerciseSelection}
+          onClose={() => setShowExerciseSelection(false)}
+          workoutType={newWorkoutType}
+          onSelect={(exercise) => {
+            setCurrentExerciseName(exercise.name);
+          }}
+        />
       </Modal>
 
       {/* Workout Name Prompt Modal */}
@@ -770,6 +781,8 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
           </View>
         </View>
       </Modal>
+
+
     </View>
   );
 }

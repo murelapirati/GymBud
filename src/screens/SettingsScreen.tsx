@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 import type { MeasurementSystem } from '../utils/measurements';
+import CustomExercisesModal from '../components/CustomExercisesModal';
 
 interface Goals {
   calories: number;
@@ -24,6 +25,7 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
   const [hasChanges, setHasChanges] = useState(false);
   const [measurementSystem, setMeasurementSystem] = useState<MeasurementSystem>('imperial');
   const [promptSaveTemplate, setPromptSaveTemplate] = useState(false);
+  const [showCustomExercises, setShowCustomExercises] = useState(false);
 
   useEffect(() => {
     loadStepMultiplier();
@@ -262,6 +264,28 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
           </View>
         </TouchableOpacity>
 
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Advanced</Text>
+        <TouchableOpacity 
+          style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+          onPress={() => setShowCustomExercises(true)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingRow}>
+            <View style={styles.settingLeft}>
+              <View style={[styles.settingIconBg, { backgroundColor: '#8B5CF622' }]}>
+                <Ionicons name="barbell-outline" size={20} color="#8B5CF6" />
+              </View>
+              <View>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>Manage Custom Exercises</Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  Add and map your own exercises
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+          </View>
+        </TouchableOpacity>
+
         <Text style={[styles.sectionTitle, { color: theme.text }]}>Appearance</Text>
         <View style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={styles.settingRow}>
@@ -377,6 +401,11 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
           </View>
         </TouchableOpacity>
       </ScrollView>
+
+      <CustomExercisesModal 
+        visible={showCustomExercises}
+        onClose={() => setShowCustomExercises(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

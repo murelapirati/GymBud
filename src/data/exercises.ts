@@ -64,4 +64,15 @@ export const PREDEFINED_EXERCISES: MappedExercise[] = [
   { id: 'ex_48', name: 'Hanging Leg Raises', type: 'calisthenics', primaryMuscles: ['abs'], secondaryMuscles: [] },
   { id: 'ex_49', name: 'Russian Twists', type: 'calisthenics', primaryMuscles: ['obliques', 'abs'], secondaryMuscles: [] },
   { id: 'ex_50', name: 'Cable Woodchoppers', type: 'gym', primaryMuscles: ['obliques', 'abs'], secondaryMuscles: [] },
+
+  // CARDIO
+  { id: 'ex_51', name: 'Running', type: 'cardio', primaryMuscles: ['quads', 'calves'], secondaryMuscles: ['hamstrings', 'glutes'] },
+  { id: 'ex_52', name: 'Cycling', type: 'cardio', primaryMuscles: ['quads'], secondaryMuscles: ['calves', 'glutes'] },
+  { id: 'ex_53', name: 'Rowing', type: 'cardio', primaryMuscles: ['lats', 'upper_back'], secondaryMuscles: ['biceps', 'quads'] },
+  { id: 'ex_54', name: 'Jump Rope', type: 'cardio', primaryMuscles: ['calves'], secondaryMuscles: ['quads'] },
+
+  // STRETCHING
+  { id: 'ex_55', name: 'Yoga Routine', type: 'stretching', primaryMuscles: [], secondaryMuscles: [] },
+  { id: 'ex_56', name: 'Dynamic Stretching', type: 'stretching', primaryMuscles: [], secondaryMuscles: [] },
+  { id: 'ex_57', name: 'Foam Rolling', type: 'stretching', primaryMuscles: [], secondaryMuscles: [] },
 ];
