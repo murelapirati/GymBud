@@ -11,7 +11,7 @@ interface RestTimerScreenProps {
 
 const RestTimerScreen: React.FC<RestTimerScreenProps> = ({ onBack }) => {
   const { theme } = useTheme();
-  const { activeRestTimer, restTimerInitialSeconds, cancelRestTimer } = useActiveWorkout();
+  const { activeRestTimer, restTimerInitialSeconds, cancelRestTimer, addExtraRestTime } = useActiveWorkout();
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -79,6 +79,24 @@ const RestTimerScreen: React.FC<RestTimerScreenProps> = ({ onBack }) => {
         </View>
       </View>
 
+      {/* Add Time Buttons */}
+      <View style={styles.addTimeContainer}>
+        <TouchableOpacity
+          style={[styles.addTimeButton, { backgroundColor: theme.card }]}
+          onPress={() => addExtraRestTime(30)}
+        >
+          <Ionicons name="add" size={20} color={theme.text} />
+          <Text style={[styles.addTimeText, { color: theme.text }]}>30s</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.addTimeButton, { backgroundColor: theme.card }]}
+          onPress={() => addExtraRestTime(60)}
+        >
+          <Ionicons name="add" size={20} color={theme.text} />
+          <Text style={[styles.addTimeText, { color: theme.text }]}>1m</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Skip Button */}
       <TouchableOpacity
         style={[styles.skipButton, { backgroundColor: theme.error }]}
@@ -131,6 +149,25 @@ const styles = StyleSheet.create({
   timerLabel: {
     fontSize: 16,
     marginTop: 8,
+  },
+  addTimeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  addTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  addTimeText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   skipButton: {
     flexDirection: 'row',

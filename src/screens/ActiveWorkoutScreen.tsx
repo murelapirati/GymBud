@@ -171,7 +171,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
       const weightNum = weightInput ? convertWeightToStorage(weightInput, measurementSystem) : undefined;
       
       // Log the set with the selected rest time
-      logSet(pendingExerciseId, repsNum, weightNum, totalSeconds);
+      const setId = logSet(pendingExerciseId, repsNum, weightNum, totalSeconds);
       
       // Clear inputs
       setReps('');
@@ -179,7 +179,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
       
       // Start timer if rest time > 0
       if (totalSeconds > 0) {
-        startRestTimer(totalSeconds);
+        startRestTimer(totalSeconds, pendingExerciseId, setId);
       }
     }
     

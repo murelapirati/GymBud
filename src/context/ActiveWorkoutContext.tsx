@@ -79,6 +79,8 @@ interface ActiveWorkoutContextType {
   restTimerEndTime: Date | null;
   restTimerInitialSeconds: number;
   restTimerCompleted: boolean;
+  activeRestExerciseId: string | null;
+  activeRestSetId: string | null;
   activeStretchTimer: number | null; // For stretching countdown
   stretchTimerEndTime: Date | null;
   stretchTimerCompleted: boolean;
@@ -91,7 +93,7 @@ interface ActiveWorkoutContextType {
   cancelWorkout: () => void;
   // Gym & Calisthenics
   addExercise: (name: string, restTimer: number) => void;
-  logSet: (exerciseId: string, reps: number, weight?: number, restTime?: number) => void;
+  logSet: (exerciseId: string, reps: number, weight?: number, restTime?: number) => string;
   updateSet: (exerciseId: string, setId: string, reps: number, weight?: number) => void;
   deleteSet: (exerciseId: string, setId: string) => void;
   // Cardio & Stretching
@@ -108,7 +110,8 @@ interface ActiveWorkoutContextType {
   // Common
   deleteExercise: (exerciseId: string) => void;
   moveExercise: (exerciseId: string, direction: 'up' | 'down') => void;
-  startRestTimer: (seconds: number) => void;
+  startRestTimer: (seconds: number, exerciseId?: string, setId?: string) => void;
+  addExtraRestTime: (seconds: number) => void;
   cancelRestTimer: () => void;
   finishExercise: (exerciseId: string) => void;
 }
@@ -137,6 +140,8 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
   const [restTimerEndTime, setRestTimerEndTime] = useState<Date | null>(null);
   const [restTimerInitialSeconds, setRestTimerInitialSeconds] = useState(0);
   const [restTimerCompleted, setRestTimerCompleted] = useState(false);
+  const [activeRestExerciseId, setActiveRestExerciseId] = useState<string | null>(null);
+  const [activeRestSetId, setActiveRestSetId] = useState<string | null>(null);
   
   // Stretching timer state
   const [activeStretchTimer, setActiveStretchTimer] = useState<number | null>(null);
@@ -166,10 +171,24 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
       const remaining = Math.floor((restTimerEndTime.getTime() - now.getTime()) / 1000);
       
       if (remaining <= 0) {
+        if (activeRestExerciseId && activeRestSetId) {
+          setExercises(prev => prev.map(ex => {
+            if (ex.id === activeRestExerciseId && ex.sets) {
+              return {
+                ...ex,
+                sets: ex.sets.map(s => s.id === activeRestSetId ? { ...s, restTime: restTimerInitialSeconds } : s),
+              };
+            }
+            return ex;
+          }));
+        }
+
         setActiveRestTimer(null);
         setRestTimerEndTime(null);
         setRestTimerInitialSeconds(0);
         setRestTimerCompleted(true);
+        setActiveRestExerciseId(null);
+        setActiveRestSetId(null);
         // Vibration pattern: vibrate 5 times (500ms vibrate, 200ms pause)
         Vibration.vibrate([0, 500, 200, 500, 200, 500, 200, 500, 200, 500]);
       } else {
@@ -178,7 +197,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     }, 100);
 
     return () => clearInterval(interval);
-  }, [activeRestTimer, restTimerEndTime]);
+  }, [activeRestTimer, restTimerEndTime, activeRestExerciseId, activeRestSetId, restTimerInitialSeconds]);
 
   // Update stretch timer countdown
   useEffect(() => {
@@ -232,6 +251,8 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     setExercises([]);
     setActiveRestTimer(null);
     setRestTimerEndTime(null);
+    setActiveRestExerciseId(null);
+    setActiveRestSetId(null);
   };
 
   const startWorkoutFromTemplate = async (template: WorkoutTemplate) => {
@@ -299,6 +320,8 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
       setExercises(workoutExercises);
       setActiveRestTimer(null);
       setRestTimerEndTime(null);
+      setActiveRestExerciseId(null);
+      setActiveRestSetId(null);
 
       // Update template's lastUsed timestamp
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUT_TEMPLATES);
@@ -384,6 +407,8 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     setActiveRestTimer(null);
     setRestTimerEndTime(null);
     setRestTimerInitialSeconds(0);
+    setActiveRestExerciseId(null);
+    setActiveRestSetId(null);
   };
 
   const cancelWorkout = () => {
@@ -394,6 +419,8 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     setExercises([]);
     setActiveRestTimer(null);
     setRestTimerEndTime(null);
+    setActiveRestExerciseId(null);
+    setActiveRestSetId(null);
   };
 
   const addExercise = (name: string, restTimer: number) => {
@@ -409,11 +436,12 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
   };
 
   const logSet = (exerciseId: string, reps: number, weight?: number, restTime?: number) => {
+    const setId = Date.now().toString();
     setExercises(prev => prev.map(ex => {
       if (ex.id === exerciseId) {
         const newSet: GymSet | CalisthenicsSet = ex.type === 'gym'
           ? {
-              id: Date.now().toString(),
+              id: setId,
               reps,
               weight: weight || 0,
               completed: true,
@@ -421,7 +449,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
               restTime,
             }
           : {
-              id: Date.now().toString(),
+              id: setId,
               reps,
               extraWeight: weight,
               completed: true,
@@ -432,6 +460,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
       }
       return ex;
     }));
+    return setId;
   };
 
   const updateSet = (exerciseId: string, setId: string, reps: number, weight?: number) => {
@@ -607,21 +636,47 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     });
   };
 
-  const startRestTimer = (seconds: number) => {
+  const startRestTimer = (seconds: number, exerciseId?: string, setId?: string) => {
     if (seconds > 0) {
       const endTime = new Date(Date.now() + seconds * 1000);
       setActiveRestTimer(seconds);
       setRestTimerEndTime(endTime);
       setRestTimerInitialSeconds(seconds);
       setRestTimerCompleted(false);
+      setActiveRestExerciseId(exerciseId || null);
+      setActiveRestSetId(setId || null);
+    }
+  };
+
+  const addExtraRestTime = (seconds: number) => {
+    if (activeRestTimer !== null && restTimerEndTime) {
+      const newEndTime = new Date(restTimerEndTime.getTime() + seconds * 1000);
+      setActiveRestTimer(activeRestTimer + seconds);
+      setRestTimerEndTime(newEndTime);
+      setRestTimerInitialSeconds(restTimerInitialSeconds + seconds);
     }
   };
 
   const cancelRestTimer = () => {
+    if (activeRestExerciseId && activeRestSetId) {
+      const actualRest = restTimerInitialSeconds - (activeRestTimer || 0);
+      setExercises(prev => prev.map(ex => {
+        if (ex.id === activeRestExerciseId && ex.sets) {
+          return {
+            ...ex,
+            sets: ex.sets.map(s => s.id === activeRestSetId ? { ...s, restTime: actualRest } : s),
+          };
+        }
+        return ex;
+      }));
+    }
+
     setActiveRestTimer(null);
     setRestTimerEndTime(null);
     setRestTimerInitialSeconds(0);
     setRestTimerCompleted(false);
+    setActiveRestExerciseId(null);
+    setActiveRestSetId(null);
   };
 
   const finishExercise = (exerciseId: string) => {
@@ -680,6 +735,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
         updateCardioActivity,
         updateStretchingActivity,
         startRestTimer,
+        addExtraRestTime,
         cancelRestTimer,
         finishExercise,
       }}
