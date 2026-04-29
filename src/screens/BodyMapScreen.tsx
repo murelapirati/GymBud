@@ -70,19 +70,41 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
   const [showVisual, setShowVisual] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const highlightedMuscles = Object.keys(MUSCLE_SLUG_MAPPING).map((m) => {
-    const muscle = m as MuscleGroup;
-    const status = muscleStatuses[muscle];
-    const rankIndex = status ? RANK_ORDER.indexOf(status.rank) : 0;
-    
-    return {
-      slug: MUSCLE_SLUG_MAPPING[muscle],
-      intensity: rankIndex + 1,
-    };
+  // The library only has a single 'deltoids' slug — no separate paths for
+  // front/side/rear heads. We use the median rank index so one overdeveloped
+  // head doesn't skew the color unfairly.
+  const deltMuscles: MuscleGroup[] = ['front_delts', 'side_delts', 'rear_delts'];
+  const deltRankIndices = deltMuscles
+    .map(m => {
+      const status = muscleStatuses[m];
+      return status ? RANK_ORDER.indexOf(status.rank) : 0;
+    })
+    .sort((a, b) => a - b);
+  const bestDeltRankIndex = deltRankIndices[Math.floor(deltRankIndices.length / 2)];
+
+  // Build the list, skipping the individual delt muscles (they'd all map to 'deltoids')
+  const DELT_MUSCLES = new Set<MuscleGroup>(['front_delts', 'side_delts', 'rear_delts']);
+  const highlightedMuscles = Object.keys(MUSCLE_SLUG_MAPPING)
+    .filter(m => !DELT_MUSCLES.has(m as MuscleGroup))
+    .map((m) => {
+      const muscle = m as MuscleGroup;
+      const status = muscleStatuses[muscle];
+      const rankIndex = status ? RANK_ORDER.indexOf(status.rank) : 0;
+      return {
+        slug: MUSCLE_SLUG_MAPPING[muscle] as any,
+        intensity: rankIndex + 1,
+      };
+    });
+
+  // Add the merged deltoids entry
+  highlightedMuscles.push({
+    slug: 'deltoids' as any,
+    intensity: bestDeltRankIndex + 1,
   });
 
+  // Adductors follow quad rank
   highlightedMuscles.push({
-    slug: 'adductors',
+    slug: 'adductors' as any,
     intensity: RANK_ORDER.indexOf(muscleStatuses['quads']?.rank || 'dirt') + 1
   });
 
@@ -184,11 +206,11 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
                   gender={gender}
                   side="front"
                   scale={1.6}
-                  baseColor={theme.card}
+                  defaultFill={theme.card}
                   colors={rankPalette}
                   defaultStroke={theme.text + '40'}
                   defaultStrokeWidth={1}
-                  hiddenParts={['triceps', 'trapezius', 'neck']}
+                  hiddenParts={['triceps', 'trapezius', 'neck'] as any}
                 />
               </View>
               <View style={styles.bodyPage}>
@@ -197,11 +219,11 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
                   gender={gender}
                   side="back"
                   scale={1.6}
-                  baseColor={theme.card}
+                  defaultFill={theme.card}
                   colors={rankPalette}
                   defaultStroke={theme.text + '40'}
                   defaultStrokeWidth={1}
-                  hiddenParts={['biceps', 'chest', 'abs', 'obliques']}
+                  hiddenParts={['biceps', 'chest', 'abs', 'obliques'] as any}
                 />
               </View>
             </ScrollView>
@@ -236,8 +258,12 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
           ) : (
              <View style={styles.visualInfo}>
                 <Text style={[styles.visualHelpText, { color: theme.textSecondary }]}>
-                  Your muscles are highlighted based on your current strength rank. 
+                  Your muscles are highlighted based on your current strength rank.{' '}
                   Keep training to level up!
+                </Text>
+                <Text style={[styles.deltNote, { color: theme.textTertiary }]}>
+                  ⚠️ Delts are shown as a combined color using your best delt rank.
+                  Switch to list view for individual scores.
                 </Text>
              </View>
           )}
@@ -432,5 +458,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  deltNote: {
+    textAlign: 'center',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 8,
+    fontStyle: 'italic',
+    opacity: 0.7,
   },
 });
