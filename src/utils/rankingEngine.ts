@@ -3,8 +3,9 @@ import { PREDEFINED_EXERCISES } from '../data/exercises';
 import { getTodayDate } from './date';
 
 // Baseline thresholds for a "Standard" muscle group (e.g. Chest)
+// Exponential scaling: fast early ranks for beginners, steep late-game climb
 // Ranks: Dirt, Wood, Iron, Bronze, Gold, Diamond, Emerald, Master, Olympian
-const BASE_THRESHOLDS: number[] = [0, 20, 40, 60, 80, 100, 125, 150, 175];
+const BASE_THRESHOLDS: number[] = [0, 10, 25, 40, 55, 80, 115, 165, 225];
 
 const RANK_ORDER: RankTier[] = [
   'dirt', 'wood', 'iron', 'bronze',
@@ -14,15 +15,15 @@ const RANK_ORDER: RankTier[] = [
 // Potential factor for each muscle group relative to Chest
 const MUSCLE_FACTORS: Record<MuscleGroup, number> = {
   chest: 1.0,
-  lats: 1.1,
-  upper_back: 1.1,
+  lats: 1.3,
+  upper_back: 1.25,
   lower_back: 1.2,
-  front_delts: 0.8,
-  side_delts: 0.6,
-  rear_delts: 0.6,
-  biceps: 0.45,
-  triceps: 0.5,
-  forearms: 0.4,
+  front_delts: 0.95,
+  side_delts: 0.9,
+  rear_delts: 0.9,
+  biceps: 0.55,
+  triceps: 0.55,
+  forearms: 0.5,
   abs: 0.4,
   obliques: 0.4,
   quads: 1.25,
@@ -32,18 +33,13 @@ const MUSCLE_FACTORS: Record<MuscleGroup, number> = {
 };
 
 /**
- * Calculates Estimated 1RM using Epley formula with RPE/RIR adjustment
+ * Calculates Estimated 1RM using pure Epley formula.
+ * Intensity is handled separately as a score multiplier in processWorkoutForRanks.
  */
-export const calculate1RM = (weight: number, reps: number, intensity: number = 5): number => {
+export const calculate1RM = (weight: number, reps: number): number => {
   if (reps === 0) return 0;
-
-  // RIR (Reps in Reserve) Adjusted Max
-  // e.g. 10/10 effort = 0 RIR, 9/10 = 1 RIR, etc.
-  const rir = Math.max(0, 10 - intensity);
-  const effectiveReps = reps + rir;
-
-  if (effectiveReps === 1) return weight;
-  return weight * (1 + effectiveReps / 30);
+  if (reps === 1) return weight;
+  return weight * (1 + reps / 30);
 };
 
 /**
@@ -71,15 +67,18 @@ export const processWorkoutForRanks = (
   const updatedStatuses = { ...currentStatuses };
   const allAvailableExercises = [...PREDEFINED_EXERCISES, ...customExercises];
 
-  // Intensity factor (baseline is 5/10)
+  // Intensity multiplier: rewards training hard (power curve for steeper top-end)
+  // 0/10 → 0.60x, 5/10 → 0.83x, 7/10 → 0.98x, 9/10 → 1.16x, 10/10 → 1.25x
   const intensity = workout.intensity || 5;
-  const intensityFactor = 1.0; // We now use RIR inside calculate1RM instead of multiplying score
+  const intensityMultiplier = 0.6 + Math.pow(intensity / 10, 1.5) * 0.65;
 
   // Collect all set scores chronologically to detect rest times
   interface ScoredSet {
     muscles: { muscle: MuscleGroup, factor: number }[];
     score: number;
     time: number;
+    exerciseName: string;
+    isCrossExerciseSuperset: boolean;
   }
   const allSets: ScoredSet[] = [];
 
@@ -89,7 +88,10 @@ export const processWorkoutForRanks = (
     if (!mapping) return;
 
     const multiplier = mapping.difficultyMultiplier || 1.0;
-    const isDumbbell = mapping.name.toLowerCase().includes('dumbbell') || mapping.name.toLowerCase().includes('dumbell');
+    const nameLower = mapping.name.toLowerCase();
+    const isDumbbell = nameLower.includes('dumbbell') || nameLower.includes('dumbell')
+      || /\bdb\b/.test(nameLower) || nameLower.includes('d.b.')
+      || nameLower.includes('hammer curl');
 
     const processSet = (weight: number, reps: number, completedAt?: Date) => {
       // Apply Dumbbell Rule: Dumbbell Weight * 2 * 1.1 for stability
@@ -98,7 +100,7 @@ export const processWorkoutForRanks = (
         effectiveWeight = weight * 2 * 1.1;
       }
 
-      const oneRM = calculate1RM(effectiveWeight, reps, intensity);
+      const oneRM = calculate1RM(effectiveWeight, reps);
       const score = oneRM * multiplier;
 
       if (score > 0) {
@@ -109,7 +111,9 @@ export const processWorkoutForRanks = (
         allSets.push({
           muscles: musclesToUpdate,
           score,
-          time: completedAt ? new Date(completedAt).getTime() : 0
+          time: completedAt ? new Date(completedAt).getTime() : 0,
+          exerciseName: mapping.name,
+          isCrossExerciseSuperset: false
         });
       }
     };
@@ -136,12 +140,24 @@ export const processWorkoutForRanks = (
   // Sort sets chronologically
   allSets.sort((a, b) => a.time - b.time);
 
+  // Detect cross-exercise supersets (different exercises within 45s)
+  // Flag BOTH sets in the pair — both the pre-exhaustion and the follow-up benefit
+  for (let i = 1; i < allSets.length; i++) {
+    if (allSets[i].time > 0 && allSets[i - 1].time > 0) {
+      const diffMs = allSets[i].time - allSets[i - 1].time;
+      if (diffMs > 1000 && diffMs <= 45000 && allSets[i].exerciseName !== allSets[i - 1].exerciseName) {
+        allSets[i].isCrossExerciseSuperset = true;
+        allSets[i - 1].isCrossExerciseSuperset = true;
+      }
+    }
+  }
+
   // Group by muscle group
-  const muscleScores: Partial<Record<MuscleGroup, { score: number, time: number }[]>> = {};
+  const muscleScores: Partial<Record<MuscleGroup, { score: number, time: number, isCrossExerciseSuperset: boolean }[]>> = {};
   allSets.forEach(s => {
     s.muscles.forEach(({ muscle, factor }) => {
       if (!muscleScores[muscle]) muscleScores[muscle] = [];
-      muscleScores[muscle]!.push({ score: s.score * factor, time: s.time });
+      muscleScores[muscle]!.push({ score: s.score * factor, time: s.time, isCrossExerciseSuperset: s.isCrossExerciseSuperset });
     });
   });
 
@@ -154,6 +170,12 @@ export const processWorkoutForRanks = (
       // Find the best set
       const maxSet = sets.reduce((prev, current) => (prev.score > current.score) ? prev : current);
       let totalMuscleScore = maxSet.score;
+
+      // If the best set was part of a cross-exercise superset, boost it
+      // (e.g. pre-exhaustion: flyes → bench press — the bench is harder under fatigue)
+      if (maxSet.isCrossExerciseSuperset) {
+        totalMuscleScore *= 1.15;
+      }
 
       // Add volume bonuses
       sets.forEach((s, index) => {
@@ -175,7 +197,15 @@ export const processWorkoutForRanks = (
         } else {
           totalMuscleScore += s.score * 0.1;
         }
+
+        // Cross-exercise superset bonus (metabolic stress from back-to-back exercises)
+        if (s.isCrossExerciseSuperset) {
+          totalMuscleScore += s.score * 0.15;
+        }
       });
+
+      // Apply intensity multiplier (rewards training hard)
+      totalMuscleScore *= intensityMultiplier;
 
       updateMuscleScore(updatedStatuses, muscle, totalMuscleScore, workout.date);
     }

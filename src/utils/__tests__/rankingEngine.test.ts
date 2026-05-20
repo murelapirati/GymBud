@@ -21,9 +21,14 @@ describe('rankingEngine', () => {
       expect(calculate1RM(100, 1)).toBe(100);
     });
 
-    it('calculates 1RM using Epley formula for >1 reps', () => {
-      // 100 * (1 + 10/30) = 100 * (1 + 0.333...) = 133.333...
+    it('calculates 1RM using pure Epley formula for >1 reps', () => {
+      // 100 * (1 + 10/30) = 100 * 1.333 = 133.333...
       expect(calculate1RM(100, 10)).toBeCloseTo(133.33, 1);
+    });
+
+    it('scales linearly with weight', () => {
+      // 60 * (1 + 8/30) = 60 * 1.267 = 76.0
+      expect(calculate1RM(60, 8)).toBeCloseTo(76.0, 1);
     });
   });
 
@@ -32,16 +37,22 @@ describe('rankingEngine', () => {
       expect(getRankForScore('chest', 0)).toBe('dirt');
     });
 
-    it('returns wood for a score of 20 (chest is 1.0 factor)', () => {
-      expect(getRankForScore('chest', 20)).toBe('wood');
+    it('returns wood for a score of 10 (chest is 1.0 factor)', () => {
+      // New thresholds: [0, 10, 25, 40, 55, 80, 115, 165, 225]
+      expect(getRankForScore('chest', 10)).toBe('wood');
+      expect(getRankForScore('chest', 24)).toBe('wood');
     });
 
-    it('returns correct rank for muscles with different factors (e.g. biceps 0.45)', () => {
-      // Biceps factor is 0.45.
-      // Base wood threshold is 20. Biceps wood threshold is 20 * 0.45 = 9.
-      expect(getRankForScore('biceps', 9)).toBe('wood');
+    it('returns iron for a score of 25 (chest)', () => {
+      expect(getRankForScore('chest', 25)).toBe('iron');
+    });
+
+    it('returns correct rank for muscles with different factors (e.g. biceps 0.55)', () => {
+      // Biceps factor is 0.55.
+      // Base wood threshold is 10. Biceps wood threshold is 10 * 0.55 = 5.5.
+      expect(getRankForScore('biceps', 5.5)).toBe('wood');
       
-      // Base diamond threshold is 100. Biceps diamond threshold is 100 * 0.45 = 45.
+      // Base diamond threshold is 80. Biceps diamond threshold is 80 * 0.55 = 44.
       expect(getRankForScore('biceps', 45)).toBe('diamond');
     });
   });

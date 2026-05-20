@@ -137,12 +137,24 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
     const color = rankColors[status.rank as keyof typeof rankColors];
 
     return (
-      <View key={muscle} style={[styles.muscleCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={[styles.rankIndicator, { backgroundColor: color }]} />
+      <View 
+        key={muscle} 
+        style={[
+          styles.muscleCard, 
+          { 
+            backgroundColor: theme.card, 
+            borderColor: color + '22',
+            borderLeftWidth: 5,
+            borderLeftColor: color,
+          }
+        ]}
+      >
         <View style={styles.cardContent}>
           <View style={styles.cardHeader}>
             <Text style={[styles.muscleName, { color: theme.text }]}>{MUSCLE_LABELS[muscle]}</Text>
-            <Text style={[styles.rankText, { color: color, textTransform: 'capitalize' }]}>{status.rank}</Text>
+            <View style={[styles.rankBadge, { backgroundColor: color + '15', borderColor: color + '30', borderWidth: 1 }]}>
+              <Text style={[styles.rankText, { color: color }]}>{status.rank}</Text>
+            </View>
           </View>
           <View style={styles.scoreRow}>
             <View style={styles.scoreItem}>
@@ -236,15 +248,18 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
         )}
 
         <View style={styles.contentContainer}>
-          <View style={styles.legendContainer}>
+          <View style={[styles.legendContainer, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]}>
             <Text style={[styles.legendTitle, { color: theme.textSecondary }]}>Rank Tiers</Text>
             <View style={styles.legendGrid}>
-              {RANK_ORDER.map((rank) => (
-                <View key={rank} style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: rankColors[rank as keyof typeof rankColors] }]} />
-                  <Text style={[styles.legendText, { color: theme.textSecondary, textTransform: 'capitalize' }]}>{rank}</Text>
-                </View>
-              ))}
+              {RANK_ORDER.map((rank) => {
+                const color = rankColors[rank as keyof typeof rankColors];
+                return (
+                  <View key={rank} style={[styles.legendItem, { backgroundColor: color + '12', borderColor: color + '25', borderWidth: 1 }]}>
+                    <View style={[styles.legendDot, { backgroundColor: color }]} />
+                    <Text style={[styles.legendText, { color: theme.text }]}>{rank}</Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
 
@@ -375,22 +390,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 12,
+    gap: 6,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '30%',
-    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    width: '31%',
+    gap: 6,
   },
   legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   legendText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   categorySection: {
     marginBottom: 24,
@@ -409,9 +430,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
   },
-  rankIndicator: {
-    width: 8,
-  },
   cardContent: {
     flex: 1,
     padding: 16,
@@ -426,10 +444,19 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
   },
+  rankBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rankText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   scoreRow: {
     flexDirection: 'row',

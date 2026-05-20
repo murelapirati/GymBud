@@ -3,6 +3,9 @@ import { storage, STORAGE_KEYS } from '../utils/storage';
 import { MuscleGroup, MuscleStatus, Workout, MappedExercise } from '../types';
 import { processWorkoutForRanks, applyDecay } from '../utils/rankingEngine';
 
+// Bump this version whenever ranking engine logic changes to trigger recalculation
+const CURRENT_RANKING_VERSION = '5';
+
 type BodyGender = 'male' | 'female';
 
 interface BodyMapContextType {
@@ -11,6 +14,7 @@ interface BodyMapContextType {
   setGender: (gender: BodyGender) => Promise<void>;
   updateRanksFromWorkout: (workout: Workout) => Promise<void>;
   refreshRanks: () => Promise<void>;
+  recalculateAllRanks: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -29,16 +33,65 @@ export const BodyMapProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [gender, setGenderState] = useState<BodyGender>('male');
   const [isLoading, setIsLoading] = useState(true);
 
+  /**
+   * Reprocesses ALL workouts from history through the current ranking engine.
+   * Called automatically when the ranking engine version changes.
+   */
+  const recalculateAllRanks = async () => {
+    try {
+      console.log('[BodyMap] Recalculating all ranks from workout history...');
+      const history = await storage.getItem<Record<string, any[]>>(STORAGE_KEYS.WORKOUT_HISTORY) || {};
+      const customExercises = await storage.getItem<MappedExercise[]>(STORAGE_KEYS.CUSTOM_EXERCISES) || [];
+
+      // Collect all workouts and sort by date
+      const allWorkouts: Workout[] = [];
+      Object.keys(history).sort().forEach(date => {
+        const dayWorkouts = history[date];
+        if (Array.isArray(dayWorkouts)) {
+          dayWorkouts.forEach(w => allWorkouts.push(w as Workout));
+        }
+      });
+
+      // Start from a clean slate and reprocess every workout
+      let statuses = {} as Record<MuscleGroup, MuscleStatus>;
+      for (const workout of allWorkouts) {
+        statuses = processWorkoutForRanks(workout, statuses, customExercises);
+      }
+
+      // Apply decay based on current date
+      statuses = applyDecay(statuses);
+
+      // Save recalculated statuses and update version
+      await storage.setItem(STORAGE_KEYS.MUSCLE_STATUS, statuses);
+      await storage.setItem(STORAGE_KEYS.RANKING_VERSION, CURRENT_RANKING_VERSION);
+      setMuscleStatuses(statuses);
+
+      console.log(`[BodyMap] Recalculated ranks from ${allWorkouts.length} workouts. Version: ${CURRENT_RANKING_VERSION}`);
+    } catch (error) {
+      console.error('Error recalculating ranks:', error);
+    }
+  };
+
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const storedStatuses = await storage.getItem<Record<MuscleGroup, MuscleStatus>>(STORAGE_KEYS.MUSCLE_STATUS);
-      if (storedStatuses) {
-        const decayed = applyDecay(storedStatuses);
-        setMuscleStatuses(decayed);
-        await storage.setItem(STORAGE_KEYS.MUSCLE_STATUS, decayed);
+      // Check if ranking engine version has changed
+      const storedVersion = await storage.getItem<string>(STORAGE_KEYS.RANKING_VERSION);
+
+      if (storedVersion !== CURRENT_RANKING_VERSION) {
+        // Engine changed — full recalculation from workout history
+        console.log(`[BodyMap] Ranking engine updated (${storedVersion} → ${CURRENT_RANKING_VERSION}). Recalculating...`);
+        await recalculateAllRanks();
       } else {
-        setMuscleStatuses({} as any);
+        // Version matches — load stored statuses normally
+        const storedStatuses = await storage.getItem<Record<MuscleGroup, MuscleStatus>>(STORAGE_KEYS.MUSCLE_STATUS);
+        if (storedStatuses) {
+          const decayed = applyDecay(storedStatuses);
+          setMuscleStatuses(decayed);
+          await storage.setItem(STORAGE_KEYS.MUSCLE_STATUS, decayed);
+        } else {
+          setMuscleStatuses({} as any);
+        }
       }
 
       const storedGender = await storage.getItem<BodyGender>(STORAGE_KEYS.BODY_GENDER);
@@ -78,7 +131,7 @@ export const BodyMapProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   return (
-    <BodyMapContext.Provider value={{ muscleStatuses, gender, setGender, updateRanksFromWorkout, refreshRanks, isLoading }}>
+    <BodyMapContext.Provider value={{ muscleStatuses, gender, setGender, updateRanksFromWorkout, refreshRanks, recalculateAllRanks, isLoading }}>
       {children}
     </BodyMapContext.Provider>
   );

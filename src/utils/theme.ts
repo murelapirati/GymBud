@@ -98,13 +98,13 @@ export type Theme = typeof darkThemeBase & {
 };
 
 export const rankColors = {
-  dirt: '#8B4513',     // SaddleBrown
-  wood: '#DEB887',     // BurlyWood
-  iron: '#D3D3D3',     // LightGray (Shinier than stone)
-  bronze: '#CD7F32',   // Bronze
-  gold: '#FFD700',     // Gold
-  diamond: '#106efaff',  // DeepSkyBlue (More vibrant)
-  emerald: '#40e00fff', // Emerald
-  master: '#e90606ff',   // Red
-  olympian: '#aff3f8ff', // Holy Blue
+  dirt: '#9A6340',      // Warm clay / earth
+  wood: '#C69E71',      // Oak / mahogany wood
+  iron: '#8F9CA6',      // Cool steel / iron
+  bronze: '#D27D2D',    // Polished bronze / copper
+  gold: '#FFD700',      // Honey gold
+  diamond: '#14b0f8ff',   // Neon diamond blue
+  emerald: '#40e00fff',   // Electric emerald green
+  master: '#FF0055',    // Hot magenta / master red
+  olympian: '#aff3f8ff',  // Holy blue
 } as const;
