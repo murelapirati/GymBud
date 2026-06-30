@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useBodyMap } from '../context/BodyMapContext';
 import { rankColors } from '../utils/theme';
 import { MuscleGroup, RankTier } from '../types';
+import { MUSCLE_THRESHOLDS, getMuscleProgress } from '../utils/rankingEngine';
 
 interface BodyMapScreenProps {
   onOpenSettings: () => void;
@@ -68,11 +69,13 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
   const { muscleStatuses, gender } = useBodyMap();
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
   const [showVisual, setShowVisual] = useState(true);
+  const [expandedMuscle, setExpandedMuscle] = useState<MuscleGroup | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // The library only has a single 'deltoids' slug — no separate paths for
-  // front/side/rear heads. We use the median rank index so one overdeveloped
-  // head doesn't skew the color unfairly.
+  // front/side/rear heads. We average the two highest heads so that
+  // developing front + side delts (very common) shows up as high intensity
+  // even if rear delts are lagging.
   const deltMuscles: MuscleGroup[] = ['front_delts', 'side_delts', 'rear_delts'];
   const deltRankIndices = deltMuscles
     .map(m => {
@@ -80,7 +83,8 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
       return status ? RANK_ORDER.indexOf(status.rank) : 0;
     })
     .sort((a, b) => a - b);
-  const bestDeltRankIndex = deltRankIndices[Math.floor(deltRankIndices.length / 2)];
+  // deltRankIndices is sorted ascending. Index 1 and 2 are the two highest heads.
+  const bestDeltRankIndex = Math.round((deltRankIndices[1] + deltRankIndices[2]) / 2);
 
   // Build the list, skipping the individual delt muscles (they'd all map to 'deltoids')
   const DELT_MUSCLES = new Set<MuscleGroup>(['front_delts', 'side_delts', 'rear_delts']);
@@ -135,10 +139,14 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
     };
 
     const color = rankColors[status.rank as keyof typeof rankColors];
+    const isExpanded = expandedMuscle === muscle;
+    const thresholds = MUSCLE_THRESHOLDS[muscle] || MUSCLE_THRESHOLDS.chest;
 
     return (
-      <View 
+      <TouchableOpacity 
         key={muscle} 
+        activeOpacity={0.85}
+        onPress={() => setExpandedMuscle(isExpanded ? null : muscle)}
         style={[
           styles.muscleCard, 
           { 
@@ -152,8 +160,15 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
         <View style={styles.cardContent}>
           <View style={styles.cardHeader}>
             <Text style={[styles.muscleName, { color: theme.text }]}>{MUSCLE_LABELS[muscle]}</Text>
-            <View style={[styles.rankBadge, { backgroundColor: color + '15', borderColor: color + '30', borderWidth: 1 }]}>
-              <Text style={[styles.rankText, { color: color }]}>{status.rank}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={[styles.rankBadge, { backgroundColor: color + '15', borderColor: color + '30', borderWidth: 1, marginRight: 8 }]}>
+                <Text style={[styles.rankText, { color: color }]}>{status.rank}</Text>
+              </View>
+              <Ionicons 
+                name={isExpanded ? "chevron-up" : "chevron-down"} 
+                size={16} 
+                color={theme.textTertiary} 
+              />
             </View>
           </View>
           <View style={styles.scoreRow}>
@@ -166,8 +181,75 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
               <Text style={[styles.scoreValue, { color: theme.textSecondary }]}>{Math.round(status.bestScore)}</Text>
             </View>
           </View>
+
+          {(() => {
+            const progress = getMuscleProgress(muscle, status.currentScore);
+            return progress.nextRank ? (
+              <View style={{ marginTop: 8 }}>
+                <View style={[styles.progressBarContainer, { backgroundColor: theme.border + '30' }]}>
+                  <View style={[styles.progressBarActive, { backgroundColor: color, width: `${progress.progressPercent}%` }]} />
+                </View>
+                <View style={styles.progressTextRow}>
+                  <Text style={[styles.progressText, { color: theme.textTertiary }]}>
+                    {progress.progressPercent.toFixed(0)}% to {progress.nextRank}
+                  </Text>
+                  <Text style={[styles.progressText, { color: color }]}>
+                    {Math.round(progress.pointsRemaining)} pts left
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View style={{ marginTop: 8 }}>
+                <View style={[styles.progressBarContainer, { backgroundColor: theme.border + '30' }]}>
+                  <View style={[styles.progressBarActive, { backgroundColor: color, width: '100%' }]} />
+                </View>
+                <View style={styles.progressTextRow}>
+                  <Text style={[styles.progressText, { color: color, fontWeight: '800' }]}>
+                    MAX RANK REACHED (OLYMPIAN)
+                  </Text>
+                </View>
+              </View>
+            );
+          })()}
+
+          {isExpanded && (
+            <View style={[styles.thresholdsTable, { borderTopWidth: 1, borderTopColor: theme.border + '50', marginTop: 12, paddingTop: 12 }]}>
+              <Text style={[styles.thresholdsTitle, { color: theme.textSecondary }]}>
+                Rank Thresholds (Power / XP)
+              </Text>
+              <View style={styles.thresholdsGrid}>
+                {RANK_ORDER.map((rank, i) => {
+                  const reqScore = thresholds[i];
+                  const hasAchieved = status.currentScore >= reqScore;
+                  const rankColor = rankColors[rank as keyof typeof rankColors];
+                  return (
+                    <View key={rank} style={styles.thresholdRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', width: '45%' }}>
+                        <View style={[styles.miniDot, { backgroundColor: rankColor }]} />
+                        <Text style={[styles.thresholdRankName, { color: rankColor }]}>
+                          {rank}
+                        </Text>
+                      </View>
+                      <Text style={[styles.thresholdScoreVal, { color: theme.textSecondary }]}>
+                        {reqScore}
+                      </Text>
+                      <View style={{ width: '30%', alignItems: 'flex-end' }}>
+                        {hasAchieved ? (
+                          <Ionicons name="checkmark-circle" size={14} color="#4ade80" />
+                        ) : (
+                          <Text style={{ fontSize: 10, color: theme.textTertiary, fontWeight: '600' }}>
+                            -{Math.round(reqScore - status.currentScore)}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -494,5 +576,63 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontStyle: 'italic',
     opacity: 0.7,
+  },
+  thresholdsTable: {
+    width: '100%',
+  },
+  thresholdsTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    opacity: 0.6,
+  },
+  thresholdsGrid: {
+    gap: 6,
+  },
+  thresholdRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+  },
+  miniDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 8,
+  },
+  thresholdRankName: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  thresholdScoreVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    width: '25%',
+    textAlign: 'right',
+  },
+  progressBarContainer: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: 4,
+    width: '100%',
+  },
+  progressBarActive: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressTextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  progressText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
 });

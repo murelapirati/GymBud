@@ -35,12 +35,40 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
 
-  // Form State
   const [name, setName] = useState('');
   const [type, setType] = useState<'gym' | 'calisthenics' | 'cardio' | 'stretching'>('gym');
   const [primaryMuscles, setPrimaryMuscles] = useState<Set<MuscleGroup>>(new Set());
   const [secondaryMuscles, setSecondaryMuscles] = useState<Set<MuscleGroup>>(new Set());
   const [difficultyMultiplier, setDifficultyMultiplier] = useState(1.0);
+
+  // Auto-calibrate difficulty multiplier based on selected primary muscles
+  useEffect(() => {
+    if (primaryMuscles.size > 0) {
+      const isAccessoryOnly = Array.from(primaryMuscles).every(m => 
+        m === 'biceps' || 
+        m === 'triceps' || 
+        m === 'forearms' || 
+        m === 'abs' || 
+        m === 'obliques' || 
+        m === 'calves' || 
+        m === 'side_delts' || 
+        m === 'rear_delts'
+      );
+      if (isAccessoryOnly) {
+        if (primaryMuscles.has('calves')) {
+          setDifficultyMultiplier(0.4);
+        } else {
+          setDifficultyMultiplier(0.5);
+        }
+      } else {
+        if (type === 'calisthenics') {
+          setDifficultyMultiplier(0.6);
+        } else {
+          setDifficultyMultiplier(1.0);
+        }
+      }
+    }
+  }, [primaryMuscles, type]);
 
   const DIFFICULTY_PRESETS = [
     { label: 'Standard Lift', value: 1.0, description: 'Matches Bench Press / Squat' },
@@ -167,7 +195,7 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
 
   const renderMuscleChips = (isPrimary: boolean) => {
     const selectedSet = isPrimary ? primaryMuscles : secondaryMuscles;
-    const selectedColor = isPrimary ? theme.primary : theme.secondary || '#8B5CF6';
+    const selectedColor = isPrimary ? theme.primary : '#8B5CF6';
 
     return (
       <View style={styles.chipContainer}>

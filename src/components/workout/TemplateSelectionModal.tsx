@@ -33,10 +33,10 @@ export const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (visible && workoutType) {
+    if (visible) {
       loadTemplates();
     }
-  }, [visible, workoutType]);
+  }, [visible]);
 
   const loadTemplates = async () => {
     try {
@@ -44,10 +44,8 @@ export const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUT_TEMPLATES);
       if (stored) {
         const allTemplates: WorkoutTemplate[] = JSON.parse(stored);
-        // Filter by workout type
-        const filtered = allTemplates.filter(t => t.workoutType === workoutType);
         // Sort by last used (most recent first), then by created date
-        filtered.sort((a, b) => {
+        allTemplates.sort((a, b) => {
           if (a.lastUsed && b.lastUsed) {
             return b.lastUsed - a.lastUsed;
           }
@@ -55,7 +53,7 @@ export const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
           if (b.lastUsed) return 1;
           return b.createdAt - a.createdAt;
         });
-        setTemplates(filtered);
+        setTemplates(allTemplates);
       } else {
         setTemplates([]);
       }

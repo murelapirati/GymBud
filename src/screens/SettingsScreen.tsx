@@ -28,13 +28,16 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
   const [measurementSystem, setMeasurementSystem] = useState<MeasurementSystem>('imperial');
   const [promptSaveTemplate, setPromptSaveTemplate] = useState(false);
   const [showCustomExercises, setShowCustomExercises] = useState(false);
-  const { gender, setGender, refreshRanks } = useBodyMap();
+  const { gender, setGender, refreshRanks, recalculateAllRanks } = useBodyMap();
+  const [bodyweightInput, setBodyweightInput] = useState('70');
+  const [hasBodyweightChanges, setHasBodyweightChanges] = useState(false);
 
 
   useEffect(() => {
     loadStepMultiplier();
     loadMeasurementSystem();
     loadPromptSaveTemplate();
+    loadBodyweight();
   }, []);
 
   const loadStepMultiplier = async () => {
@@ -64,6 +67,15 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
       const newSystem: MeasurementSystem = measurementSystem === 'imperial' ? 'metric' : 'imperial';
       await storage.setItem(STORAGE_KEYS.MEASUREMENT_SYSTEM, newSystem);
       setMeasurementSystem(newSystem);
+      
+      const currentVal = parseFloat(bodyweightInput);
+      if (!isNaN(currentVal)) {
+        if (newSystem === 'metric') {
+          setBodyweightInput((currentVal / 2.20462).toFixed(1));
+        } else {
+          setBodyweightInput((currentVal * 2.20462).toFixed(1));
+        }
+      }
     } catch (error) {
       console.error('Error saving measurement system:', error);
       Alert.alert('Error', 'Failed to save measurement preference');
@@ -89,6 +101,50 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
     } catch (error) {
       console.error('Error saving template prompt setting:', error);
       Alert.alert('Error', 'Failed to save setting');
+    }
+  };
+
+  const loadBodyweight = async () => {
+    try {
+      const storedWeight = await storage.getItem<number>(STORAGE_KEYS.USER_BODYWEIGHT) || 70;
+      const system = await storage.getItem<MeasurementSystem>(STORAGE_KEYS.MEASUREMENT_SYSTEM) || 'imperial';
+      
+      if (system === 'metric') {
+        setBodyweightInput(storedWeight.toFixed(1));
+      } else {
+        setBodyweightInput((storedWeight * 2.20462).toFixed(1));
+      }
+    } catch (error) {
+      console.error('Error loading bodyweight:', error);
+    }
+  };
+
+  const saveBodyweight = async () => {
+    try {
+      const inputVal = parseFloat(bodyweightInput);
+      if (isNaN(inputVal) || inputVal <= 0) {
+        Alert.alert('Invalid Value', 'Please enter a valid body weight');
+        return;
+      }
+
+      let weightInKg = inputVal;
+      if (measurementSystem === 'imperial') {
+        weightInKg = inputVal / 2.20462;
+      }
+
+      if (weightInKg < 20 || weightInKg > 300) {
+        Alert.alert('Invalid Value', 'Body weight must be between 20kg and 300kg');
+        return;
+      }
+
+      await storage.setItem(STORAGE_KEYS.USER_BODYWEIGHT, weightInKg);
+      setHasBodyweightChanges(false);
+      
+      await recalculateAllRanks();
+      Alert.alert('Success', 'Body weight saved and muscle ranks recalculated!');
+    } catch (error) {
+      console.error('Error saving bodyweight:', error);
+      Alert.alert('Error', 'Failed to save body weight');
     }
   };
 
@@ -388,6 +444,44 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
               ios_backgroundColor='#E0E0E0'
               style={{ transform: [{ scaleX: 1.1 }, { scaleY: 1.1 }] }}
             />
+          </View>
+        </View>
+
+        <View style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View>
+            <View style={styles.settingLeft}>
+              <View style={[styles.settingIconBg, { backgroundColor: '#3B82F622' }]}>
+                <Ionicons name="scale-outline" size={20} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>Body Weight</Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  Used for calisthenics scaling ({measurementSystem === 'metric' ? 'kg' : 'lbs'})
+                </Text>
+              </View>
+            </View>
+            <View style={styles.offsetInputContainer}>
+              <TextInput
+                style={[styles.offsetInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                placeholder={measurementSystem === 'metric' ? '70' : '154'}
+                placeholderTextColor={theme.textSecondary}
+                keyboardType="numeric"
+                value={bodyweightInput}
+                onChangeText={(value) => {
+                  setBodyweightInput(value);
+                  setHasBodyweightChanges(true);
+                }}
+              />
+              <TouchableOpacity
+                style={[styles.saveOffsetButton, { backgroundColor: hasBodyweightChanges ? theme.primary : theme.border }]}
+                onPress={saveBodyweight}
+                disabled={!hasBodyweightChanges}
+              >
+                <Text style={[styles.saveOffsetButtonText, { color: hasBodyweightChanges ? 'white' : theme.textSecondary }]}>
+                  Save
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 

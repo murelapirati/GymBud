@@ -22,6 +22,7 @@ export const STORAGE_KEYS = {
   MUSCLE_STATUS: '@gymapp_muscle_status',
   BODY_GENDER: '@gymapp_body_gender',
   RANKING_VERSION: '@gymapp_ranking_version',
+  USER_BODYWEIGHT: '@gymapp_user_bodyweight',
 } as const;
 
 // Generic storage functions

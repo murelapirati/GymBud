@@ -12,24 +12,25 @@ const RANK_ORDER: RankTier[] = [
   'gold', 'diamond', 'emerald', 'master', 'olympian'
 ];
 
-// Potential factor for each muscle group relative to Chest
-const MUSCLE_FACTORS: Record<MuscleGroup, number> = {
-  chest: 1.0,
-  lats: 1.3,
-  upper_back: 1.25,
-  lower_back: 1.2,
-  front_delts: 0.95,
-  side_delts: 0.9,
-  rear_delts: 0.9,
-  biceps: 0.55,
-  triceps: 0.55,
-  forearms: 0.5,
-  abs: 0.4,
-  obliques: 0.4,
-  quads: 1.25,
-  hamstrings: 1.1,
-  glutes: 1.2,
-  calves: 0.5,
+// Explicit thresholds for each muscle group based on empirical training standards (effective 1RM load)
+// Tiers in order: Dirt, Wood, Iron, Bronze, Gold, Diamond, Emerald, Master, Olympian
+export const MUSCLE_THRESHOLDS: Record<MuscleGroup, number[]> = {
+  chest: [0, 10, 25, 40, 55, 80, 115, 165, 225],
+  lats: [0, 8, 20, 35, 50, 75, 105, 145, 195],
+  upper_back: [0, 8, 20, 35, 50, 75, 105, 145, 195],
+  lower_back: [0, 15, 35, 60, 85, 125, 175, 240, 320],
+  front_delts: [0, 8, 18, 30, 45, 65, 90, 125, 170],
+  side_delts: [0, 2, 5, 10, 15, 25, 38, 55, 75],
+  rear_delts: [0, 2, 5, 10, 15, 25, 38, 55, 75],
+  biceps: [0, 3, 7, 12, 18, 28, 40, 55, 75],
+  triceps: [0, 4, 10, 18, 28, 42, 60, 82, 110],
+  forearms: [0, 3, 7, 12, 18, 28, 40, 55, 75],
+  abs: [0, 2, 5, 9, 14, 20, 28, 38, 50],
+  obliques: [0, 2, 5, 9, 14, 20, 28, 38, 50],
+  quads: [0, 12, 30, 50, 75, 110, 155, 210, 280],
+  hamstrings: [0, 10, 25, 40, 60, 90, 125, 170, 225],
+  glutes: [0, 12, 30, 50, 75, 110, 155, 210, 280],
+  calves: [0, 8, 20, 35, 55, 80, 115, 160, 220],
 };
 
 /**
@@ -46,14 +47,103 @@ export const calculate1RM = (weight: number, reps: number): number => {
  * Gets the RankTier for a specific muscle score
  */
 export const getRankForScore = (muscle: MuscleGroup, score: number): RankTier => {
-  const factor = MUSCLE_FACTORS[muscle] || 1.0;
+  const thresholds = MUSCLE_THRESHOLDS[muscle] || MUSCLE_THRESHOLDS.chest;
 
   for (let i = RANK_ORDER.length - 1; i >= 0; i--) {
-    if (score >= BASE_THRESHOLDS[i] * factor) {
+    if (score >= thresholds[i]) {
       return RANK_ORDER[i];
     }
   }
   return 'dirt';
+};
+
+/**
+ * Gets the biomechanical load percentage of bodyweight moved during a calisthenics movement.
+ */
+const getCalisthenicsBodyweightFactor = (exerciseName: string): number => {
+  const name = exerciseName.toLowerCase();
+  if (name.includes('pull-up') || name.includes('pullup') || name.includes('chin-up') || name.includes('chinup')) {
+    return 0.90; // Pull-ups move ~90% of bodyweight
+  }
+  if (name.includes('dip')) {
+    return 0.85; // Dips move ~85% of bodyweight
+  }
+  if (name.includes('push-up') || name.includes('pushup')) {
+    return 0.65; // Push-ups move ~65% of bodyweight
+  }
+  if (name.includes('pistol squat') || name.includes('single-leg squat')) {
+    return 1.0; // Pistol squats move ~100% of bodyweight
+  }
+  if (name.includes('crunch') || name.includes('plank') || name.includes('leg raise') || name.includes('twist')) {
+    return 0.15; // Core movements move very little percentage of total bodyweight directly
+  }
+  return 0.70; // Default factor for general bodyweight movements
+};
+
+/**
+ * Gets the muscle contribution factor for an exercise (primary/secondary split tuning).
+ */
+const getMuscleContributionFactor = (exerciseName: string, muscle: MuscleGroup, isPrimary: boolean): number => {
+  const name = exerciseName.toLowerCase();
+  
+  if (isPrimary) {
+    // For Dips, chest and triceps are primary, but chest does the major work and triceps is smaller.
+    // Scale triceps down to 0.5 and chest to 0.7 to avoid inflation.
+    if (name.includes('dip')) {
+      if (muscle === 'triceps') return 0.50;
+      if (muscle === 'chest') return 0.70;
+    }
+    return 1.0; // Default primary contribution
+  } else {
+    // Core and stabilizers receive lower contribution when acting as secondary muscles
+    if (muscle === 'abs' || muscle === 'obliques' || muscle === 'lower_back' || muscle === 'forearms') {
+      return 0.10;
+    }
+    // Standard secondary muscle progress factor from 0.50 to 0.25 (per user request)
+    return 0.25;
+  }
+};
+
+/**
+ * Automatically calibrates/sanitizes the difficulty multiplier for exercises
+ * to prevent rank inflation on isolation/accessory muscle groups (e.g. calves/triceps).
+ */
+export const getCalibratedMultiplier = (mapping: MappedExercise): number => {
+  const multiplier = mapping.difficultyMultiplier || 1.0;
+  
+  if (mapping.primaryMuscles.length > 0) {
+    // 1. Standard isolation/accessory check (biceps, triceps, forearms, abs, obliques, calves, side/rear delts)
+    const isAccessoryOnly = mapping.primaryMuscles.every(m => 
+      m === 'biceps' || 
+      m === 'triceps' || 
+      m === 'forearms' || 
+      m === 'abs' || 
+      m === 'obliques' || 
+      m === 'calves' || 
+      m === 'side_delts' || 
+      m === 'rear_delts'
+    );
+    
+    if (isAccessoryOnly && multiplier > 0.5) {
+      if (mapping.primaryMuscles.includes('calves')) {
+        return 0.4; // Calves clamp
+      }
+      return 0.5; // Arms/Core/Delts clamp
+    }
+
+    // 2. Leg isolation check (quads-only, hamstrings-only, glutes-only)
+    if (mapping.primaryMuscles.length === 1) {
+      const singleMuscle = mapping.primaryMuscles[0];
+      if ((singleMuscle === 'quads' || singleMuscle === 'hamstrings') && multiplier > 0.5) {
+        return 0.5; // Clamp leg extensions / curls to accessory level (0.5)
+      }
+      if (singleMuscle === 'glutes' && multiplier > 0.6) {
+        return 0.6; // Clamp glute isolation/kickbacks to glute bridge level (0.6)
+      }
+    }
+  }
+  
+  return multiplier;
 };
 
 /**
@@ -62,7 +152,8 @@ export const getRankForScore = (muscle: MuscleGroup, score: number): RankTier =>
 export const processWorkoutForRanks = (
   workout: Workout,
   currentStatuses: Record<MuscleGroup, MuscleStatus>,
-  customExercises: MappedExercise[] = []
+  customExercises: MappedExercise[] = [],
+  bodyweight: number = 70
 ): Record<MuscleGroup, MuscleStatus> => {
   const updatedStatuses = { ...currentStatuses };
   const allAvailableExercises = [...PREDEFINED_EXERCISES, ...customExercises];
@@ -78,7 +169,7 @@ export const processWorkoutForRanks = (
     score: number;
     time: number;
     exerciseName: string;
-    isCrossExerciseSuperset: boolean;
+    supersettedMuscles: Set<MuscleGroup>;
   }
   const allSets: ScoredSet[] = [];
 
@@ -87,11 +178,13 @@ export const processWorkoutForRanks = (
     const mapping = allAvailableExercises.find(m => m.name === ex.name);
     if (!mapping) return;
 
-    const multiplier = mapping.difficultyMultiplier || 1.0;
+    const multiplier = getCalibratedMultiplier(mapping);
     const nameLower = mapping.name.toLowerCase();
-    const isDumbbell = nameLower.includes('dumbbell') || nameLower.includes('dumbell')
-      || /\bdb\b/.test(nameLower) || nameLower.includes('d.b.')
-      || nameLower.includes('hammer curl');
+    const isDumbbell = mapping.equipment
+      ? mapping.equipment === 'dumbbell'
+      : (nameLower.includes('dumbbell') || nameLower.includes('dumbell')
+        || /\bdb\b/.test(nameLower) || nameLower.includes('d.b.')
+        || nameLower.includes('hammer curl'));
 
     const processSet = (weight: number, reps: number, completedAt?: Date) => {
       // Apply Dumbbell Rule: Dumbbell Weight * 2 * 1.1 for stability
@@ -105,15 +198,25 @@ export const processWorkoutForRanks = (
 
       if (score > 0) {
         const musclesToUpdate: { muscle: MuscleGroup, factor: number }[] = [];
-        mapping.primaryMuscles.forEach(m => musclesToUpdate.push({ muscle: m, factor: 1.0 }));
-        mapping.secondaryMuscles.forEach(m => musclesToUpdate.push({ muscle: m, factor: 0.5 }));
+        mapping.primaryMuscles.forEach(m => {
+          musclesToUpdate.push({ 
+            muscle: m, 
+            factor: getMuscleContributionFactor(mapping.name, m, true) 
+          });
+        });
+        mapping.secondaryMuscles.forEach(m => {
+          musclesToUpdate.push({ 
+            muscle: m, 
+            factor: getMuscleContributionFactor(mapping.name, m, false) 
+          });
+        });
 
         allSets.push({
           muscles: musclesToUpdate,
           score,
           time: completedAt ? new Date(completedAt).getTime() : 0,
           exerciseName: mapping.name,
-          isCrossExerciseSuperset: false
+          supersettedMuscles: new Set<MuscleGroup>()
         });
       }
     };
@@ -127,10 +230,11 @@ export const processWorkoutForRanks = (
       });
     } else if (mapping.type === 'calisthenics') {
       const caliEx = ex as unknown as CalisthenicsExercise;
-      const BASE_BODYWEIGHT = 70;
+      const BASE_BODYWEIGHT = bodyweight;
+      const bodyweightFactor = getCalisthenicsBodyweightFactor(mapping.name);
       caliEx.sets.forEach(set => {
         if (set.completed && !(set as any).isWarmup) {
-          const effectiveWeight = BASE_BODYWEIGHT + (set.extraWeight || 0);
+          const effectiveWeight = (BASE_BODYWEIGHT * bodyweightFactor) + (set.extraWeight || 0);
           processSet(effectiveWeight, set.reps, set.completedAt);
         }
       });
@@ -141,13 +245,30 @@ export const processWorkoutForRanks = (
   allSets.sort((a, b) => a.time - b.time);
 
   // Detect cross-exercise supersets (different exercises within 45s)
-  // Flag BOTH sets in the pair — both the pre-exhaustion and the follow-up benefit
+  // Flag shared muscles only, and only if earlier is isolation and later is compound
   for (let i = 1; i < allSets.length; i++) {
-    if (allSets[i].time > 0 && allSets[i - 1].time > 0) {
-      const diffMs = allSets[i].time - allSets[i - 1].time;
-      if (diffMs > 1000 && diffMs <= 45000 && allSets[i].exerciseName !== allSets[i - 1].exerciseName) {
-        allSets[i].isCrossExerciseSuperset = true;
-        allSets[i - 1].isCrossExerciseSuperset = true;
+    const prev = allSets[i - 1];
+    const curr = allSets[i];
+    if (prev.time > 0 && curr.time > 0) {
+      const diffMs = curr.time - prev.time;
+      if (diffMs > 1000 && diffMs <= 45000 && prev.exerciseName !== curr.exerciseName) {
+        const prevMapping = allAvailableExercises.find(m => m.name === prev.exerciseName);
+        const currMapping = allAvailableExercises.find(m => m.name === curr.exerciseName);
+        if (prevMapping && currMapping) {
+          const prevMechanic = prevMapping.mechanic;
+          const currMechanic = currMapping.mechanic;
+          if (prevMechanic === 'isolation' && currMechanic === 'compound') {
+            const prevMuscles = [...prevMapping.primaryMuscles, ...prevMapping.secondaryMuscles];
+            const currMuscles = [...currMapping.primaryMuscles, ...currMapping.secondaryMuscles];
+            const shared = prevMuscles.filter(m => currMuscles.includes(m));
+            if (shared.length > 0) {
+              shared.forEach(m => {
+                prev.supersettedMuscles.add(m);
+                curr.supersettedMuscles.add(m);
+              });
+            }
+          }
+        }
       }
     }
   }
@@ -157,7 +278,8 @@ export const processWorkoutForRanks = (
   allSets.forEach(s => {
     s.muscles.forEach(({ muscle, factor }) => {
       if (!muscleScores[muscle]) muscleScores[muscle] = [];
-      muscleScores[muscle]!.push({ score: s.score * factor, time: s.time, isCrossExerciseSuperset: s.isCrossExerciseSuperset });
+      const isSupersetForMuscle = s.supersettedMuscles.has(muscle);
+      muscleScores[muscle]!.push({ score: s.score * factor, time: s.time, isCrossExerciseSuperset: isSupersetForMuscle });
     });
   });
 
@@ -281,4 +403,46 @@ export const applyDecay = (
   });
 
   return updatedStatuses;
+};
+
+export interface MuscleProgress {
+  currentRank: RankTier;
+  nextRank: RankTier | null;
+  progressPercent: number;
+  pointsRemaining: number;
+}
+
+export const getMuscleProgress = (
+  muscle: MuscleGroup,
+  score: number
+): MuscleProgress => {
+  const thresholds = MUSCLE_THRESHOLDS[muscle] || MUSCLE_THRESHOLDS.chest;
+  const currentRank = getRankForScore(muscle, score);
+  const currentIndex = RANK_ORDER.indexOf(currentRank);
+
+  if (currentIndex === RANK_ORDER.length - 1) {
+    return {
+      currentRank,
+      nextRank: null,
+      progressPercent: 100,
+      pointsRemaining: 0,
+    };
+  }
+
+  const nextRank = RANK_ORDER[currentIndex + 1];
+  const currentThreshold = thresholds[currentIndex];
+  const nextThreshold = thresholds[currentIndex + 1];
+
+  const range = nextThreshold - currentThreshold;
+  const progressPercent = range > 0
+    ? Math.min(100, Math.max(0, ((score - currentThreshold) / range) * 100))
+    : 100;
+  const pointsRemaining = Math.max(0, nextThreshold - score);
+
+  return {
+    currentRank,
+    nextRank,
+    progressPercent,
+    pointsRemaining,
+  };
 };

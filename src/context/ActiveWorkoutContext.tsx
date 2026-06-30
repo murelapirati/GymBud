@@ -95,7 +95,7 @@ interface ActiveWorkoutContextType {
   finishWorkout: (notes?: string, intensity?: number) => void;
   cancelWorkout: () => void;
   // Gym & Calisthenics
-  addExercise: (name: string, restTimer: number) => void;
+  addExercise: (name: string, restTimer: number, type?: 'gym' | 'calisthenics') => void;
   logSet: (exerciseId: string, reps: number, weight?: number, restTime?: number, isWarmup?: boolean) => string;
   updateSet: (exerciseId: string, setId: string, reps: number, weight?: number) => void;
   deleteSet: (exerciseId: string, setId: string) => void;
@@ -432,12 +432,12 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     setActiveRestSetId(null);
   };
 
-  const addExercise = (name: string, restTimer: number) => {
-    const type = workoutType === 'gym' ? 'gym' : workoutType === 'calisthenics' ? 'calisthenics' : 'gym';
+  const addExercise = (name: string, restTimer: number, type?: 'gym' | 'calisthenics') => {
+    const resolvedType = type || (workoutType === 'gym' ? 'gym' : workoutType === 'calisthenics' ? 'calisthenics' : 'gym');
     const newExercise: WorkoutExercise = {
       id: Date.now().toString(),
       name,
-      type,
+      type: resolvedType,
       sets: [],
       restTimer,
     };
@@ -733,6 +733,8 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
         restTimerEndTime,
         restTimerInitialSeconds,
         restTimerCompleted,
+        activeRestExerciseId,
+        activeRestSetId,
         activeStretchTimer,
         stretchTimerEndTime,
         stretchTimerCompleted,

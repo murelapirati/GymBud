@@ -39,7 +39,6 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   const [newWorkoutType, setNewWorkoutType] = useState<WorkoutType>('gym');
   const [newExercises, setNewExercises] = useState<TemplateExercise[]>([]);
   const [showTypeSelector, setShowTypeSelector] = useState(true);
-  const [currentExerciseName, setCurrentExerciseName] = useState('');
   const [showExerciseSelection, setShowExerciseSelection] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<WorkoutTemplate | null>(null);
@@ -201,8 +200,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
     setNewWorkoutName('');
     setNewWorkoutType('gym');
     setNewExercises([]);
-    setCurrentExerciseName('');
-    setShowTypeSelector(true);
+    setShowTypeSelector(false);
     setShowNamePrompt(false);
     setShowCreateModal(true);
   };
@@ -212,7 +210,6 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
     setNewWorkoutName(template.name);
     setNewWorkoutType(template.workoutType);
     setNewExercises(template.exercises);
-    setCurrentExerciseName('');
     setShowTypeSelector(false);
     setShowNamePrompt(false);
     setShowCreateModal(true);
@@ -221,23 +218,6 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   const selectWorkoutType = (type: WorkoutType) => {
     setNewWorkoutType(type);
     setShowTypeSelector(false);
-  };
-
-  const addExercise = () => {
-    if (!currentExerciseName.trim()) {
-      Alert.alert('Missing Name', 'Please enter an exercise name');
-      return;
-    }
-
-    const newExercise: TemplateExercise = {
-      id: Date.now().toString(),
-      name: currentExerciseName.trim(),
-      restTimer: newWorkoutType === 'gym' || newWorkoutType === 'calisthenics' ? 90 : undefined,
-      duration: newWorkoutType === 'cardio' || newWorkoutType === 'stretching' ? 60 : undefined,
-      type: newWorkoutType,
-    };
-    setNewExercises([...newExercises, newExercise]);
-    setCurrentExerciseName('');
   };
 
   const removeExercise = (id: string) => {
@@ -319,7 +299,6 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
       setShowNamePrompt(false);
       setNewWorkoutName('');
       setNewExercises([]);
-      setCurrentExerciseName('');
       setEditingTemplate(null);
     } catch (error) {
       console.error('Error saving workout:', error);
@@ -332,7 +311,6 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
     setShowNamePrompt(false);
     setNewWorkoutName('');
     setNewExercises([]);
-    setCurrentExerciseName('');
     setShowTypeSelector(true);
     setEditingTemplate(null);
   };
@@ -482,98 +460,61 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                 </TouchableOpacity>
               </View>
             ) : (
-              <>
-                {(Object.keys(groupedTemplates) as WorkoutType[]).map(workoutType => {
-                  const isCollapsed = collapsedSections.has(workoutType);
-                  const templateCount = groupedTemplates[workoutType].length;
-
-                  return (
-                    <View key={workoutType}>
-                      <TouchableOpacity
-                        style={[styles.sectionHeader, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                        onPress={() => toggleSection(workoutType)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.sectionHeaderLeft}>
+              <View style={{ paddingBottom: 80 }}>
+                {templates.map(template => (
+                  <View
+                    key={template.id}
+                    style={[styles.templateCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+                  >
+                    <View style={styles.templateHeader}>
+                      <View style={styles.templateInfo}>
+                        <View style={[styles.typeIcon, { backgroundColor: theme.primary + '20' }]}>
                           <Ionicons
-                            name={getWorkoutTypeIcon(workoutType)}
+                            name={getWorkoutTypeIcon(template.workoutType)}
                             size={20}
                             color={theme.primary}
-                            style={{ marginRight: 8 }}
                           />
-                          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                            {getWorkoutTypeLabel(workoutType)} Workouts
-                          </Text>
-                          <View style={[styles.countBadge, { backgroundColor: theme.primary + '20' }]}>
-                            <Text style={[styles.countBadgeText, { color: theme.primary }]}>
-                              {templateCount}
-                            </Text>
-                          </View>
                         </View>
-                        <Ionicons
-                          name={isCollapsed ? "chevron-down" : "chevron-up"}
-                          size={24}
-                          color={theme.textSecondary}
-                        />
-                      </TouchableOpacity>
-
-                      {!isCollapsed && groupedTemplates[workoutType].map(template => (
-                        <View
-                          key={template.id}
-                          style={[styles.templateCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+                        <View style={styles.templateText}>
+                          <Text style={[styles.templateName, { color: theme.text }]}>
+                            {template.name}
+                          </Text>
+                          <Text style={[styles.templateMeta, { color: theme.textSecondary }]}>
+                            {template.exercises.length} exercise{template.exercises.length !== 1 ? 's' : ''} • Created {formatDate(template.createdAt)}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.actionButtons}>
+                        <TouchableOpacity
+                          onPress={() => startEditWorkout(template)}
+                          style={styles.editButton}
                         >
-                          <View style={styles.templateHeader}>
-                            <View style={styles.templateInfo}>
-                              <View style={[styles.typeIcon, { backgroundColor: theme.primary + '20' }]}>
-                                <Ionicons
-                                  name={getWorkoutTypeIcon(template.workoutType)}
-                                  size={20}
-                                  color={theme.primary}
-                                />
-                              </View>
-                              <View style={styles.templateText}>
-                                <Text style={[styles.templateName, { color: theme.text }]}>
-                                  {template.name}
-                                </Text>
-                                <Text style={[styles.templateMeta, { color: theme.textSecondary }]}>
-                                  {template.exercises.length} exercise{template.exercises.length !== 1 ? 's' : ''} • Created {formatDate(template.createdAt)}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={styles.actionButtons}>
-                              <TouchableOpacity
-                                onPress={() => startEditWorkout(template)}
-                                style={styles.editButton}
-                              >
-                                <Ionicons name="create-outline" size={20} color={theme.primary} />
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => deleteTemplate(template.id)}
-                                style={styles.deleteButton}
-                              >
-                                <Ionicons name="trash-outline" size={20} color={theme.error} />
-                              </TouchableOpacity>
-                            </View>
-                          </View>
+                          <Ionicons name="create-outline" size={20} color={theme.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => deleteTemplate(template.id)}
+                          style={styles.deleteButton}
+                        >
+                          <Ionicons name="trash-outline" size={20} color={theme.error} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
 
-                          <View style={styles.exerciseList}>
-                            {template.exercises.map((exercise, index) => (
-                              <View key={exercise.id} style={styles.exerciseItem}>
-                                <Text style={[styles.exerciseNumber, { color: theme.textSecondary }]}>
-                                  {index + 1}.
-                                </Text>
-                                <Text style={[styles.exerciseName, { color: theme.text }]}>
-                                  {exercise.name}
-                                </Text>
-                              </View>
-                            ))}
-                          </View>
+                    <View style={styles.exerciseList}>
+                      {template.exercises.map((exercise, index) => (
+                        <View key={exercise.id} style={styles.exerciseItem}>
+                          <Text style={[styles.exerciseNumber, { color: theme.textSecondary }]}>
+                            {index + 1}.
+                          </Text>
+                          <Text style={[styles.exerciseName, { color: theme.text }]}>
+                            {exercise.name}
+                          </Text>
                         </View>
                       ))}
                     </View>
-                  );
-                })}
-              </>
+                  </View>
+                ))}
+              </View>
             )}
           </>
         )}
@@ -651,22 +592,26 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                     </View>
                   )}
 
-                  <View style={styles.addExerciseSection}>
-                    <TouchableOpacity
-                      style={[styles.exerciseNameInput, { backgroundColor: theme.surface, borderColor: theme.border, justifyContent: 'center' }]}
-                      onPress={() => setShowExerciseSelection(true)}
-                    >
-                      <Text style={{ color: currentExerciseName ? theme.text : theme.textSecondary, fontSize: 16 }}>
-                        {currentExerciseName || 'Select Exercise...'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.addButton, { backgroundColor: theme.primary }]}
-                      onPress={addExercise}
-                    >
-                      <Ionicons name="add" size={24} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity
+                    style={[
+                      {
+                        backgroundColor: theme.primary + '15',
+                        borderColor: theme.primary,
+                        borderWidth: 1,
+                        borderStyle: 'dashed',
+                        borderRadius: 8,
+                        padding: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        marginBottom: 16,
+                      }
+                    ]}
+                    onPress={() => setShowExerciseSelection(true)}
+                  >
+                    <Ionicons name="add-circle" size={20} color={theme.primary} style={{ marginRight: 6 }} />
+                    <Text style={{ color: theme.primary, fontSize: 16, fontWeight: '600' }}>Add Exercise</Text>
+                  </TouchableOpacity>
 
                   <ScrollView style={styles.builderContent} showsVerticalScrollIndicator={false}>
                     {newExercises.length > 0 ? (
@@ -733,13 +678,19 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
           </View>
         </KeyboardAvoidingView>
 
-        {/* Exercise selection overlay – lives inside the Modal so absoluteFill covers it */}
         <ExerciseSelectionModal
           visible={showExerciseSelection}
           onClose={() => setShowExerciseSelection(false)}
           workoutType={newWorkoutType}
           onSelect={(exercise) => {
-            setCurrentExerciseName(exercise.name);
+            const newExercise: TemplateExercise = {
+              id: Date.now().toString(),
+              name: exercise.name.trim(),
+              restTimer: newWorkoutType === 'gym' || newWorkoutType === 'calisthenics' ? 90 : undefined,
+              duration: newWorkoutType === 'cardio' || newWorkoutType === 'stretching' ? 60 : undefined,
+              type: newWorkoutType,
+            };
+            setNewExercises(prev => [...prev, newExercise]);
           }}
         />
       </Modal>

@@ -65,7 +65,6 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
     toggleSetWarmup,
   } = useActiveWorkout();
 
-  const [exerciseName, setExerciseName] = useState('');
   const [showExerciseSelection, setShowExerciseSelection] = useState(false);
   const [activeExerciseId, setActiveExerciseId] = useState<string | null>(null);
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
@@ -114,34 +113,6 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleAddExercise = () => {
-    if (!exerciseName.trim()) return;
-    
-    // Rest timer will be set per-set now, so we'll use 0 as default
-    addExercise(exerciseName.trim(), 0);
-    setActiveExerciseId(null);
-    setExerciseName('');
-    Keyboard.dismiss();
-  };
-
-  const handleAddCardio = () => {
-    if (!exerciseName.trim()) return;
-    
-    addCardioActivity(exerciseName.trim());
-    setExerciseName('');
-    Keyboard.dismiss();
-  };
-
-  const handleAddStretching = () => {
-    if (!exerciseName.trim() || !stretchingDuration) return;
-    
-    const durationSeconds = parseInt(stretchingDuration) * 60; // convert minutes to seconds
-    addStretchingActivity(exerciseName.trim(), durationSeconds);
-    setExerciseName('');
-    setStretchingDuration('');
-    Keyboard.dismiss();
   };
 
   const handleLogSet = () => {
@@ -453,72 +424,17 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
           contentContainerStyle={styles.contentContainer}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Add Activity/Exercise Form - varies by workout type */}
-          {workoutType === 'gym' || workoutType === 'calisthenics' ? (
-            <View style={[styles.card, { backgroundColor: theme.card }]}>
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                Add Exercise
-              </Text>
-              
-              <TouchableOpacity
-                style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, justifyContent: 'center' }]}
-                onPress={() => setShowExerciseSelection(true)}
-              >
-                <Text style={{ color: exerciseName ? theme.text : theme.textSecondary, fontSize: 16 }}>
-                  {exerciseName || 'Select Exercise...'}
-                </Text>
-              </TouchableOpacity>
+          {/* Add Exercise / Activity Form */}
+          <View style={[styles.card, { backgroundColor: theme.card }]}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              Add Exercise or Activity
+            </Text>
 
-              <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: theme.primary }]}
-                onPress={handleAddExercise}
-              >
-                <Ionicons name="add-circle-outline" size={20} color="white" />
-                <Text style={styles.addButtonText}>Add Exercise</Text>
-              </TouchableOpacity>
-            </View>
-          ) : workoutType === 'cardio' ? (
-            <View style={[styles.card, { backgroundColor: theme.card }]}>
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                Add Cardio Activity
-              </Text>
-              
-              <TouchableOpacity
-                style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, justifyContent: 'center' }]}
-                onPress={() => setShowExerciseSelection(true)}
-              >
-                <Text style={{ color: exerciseName ? theme.text : theme.textSecondary, fontSize: 16 }}>
-                  {exerciseName || 'Select Activity (e.g. Running)...'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: theme.primary }]}
-                onPress={handleAddCardio}
-              >
-                <Ionicons name="add-circle-outline" size={20} color="white" />
-                <Text style={styles.addButtonText}>Add Activity</Text>
-              </TouchableOpacity>
-            </View>
-          ) : workoutType === 'stretching' ? (
-            <View style={[styles.card, { backgroundColor: theme.card }]}>
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                Add Stretching/Pilates Exercise
-              </Text>
-              
-              <TouchableOpacity
-                style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, justifyContent: 'center' }]}
-                onPress={() => setShowExerciseSelection(true)}
-              >
-                <Text style={{ color: exerciseName ? theme.text : theme.textSecondary, fontSize: 16 }}>
-                  {exerciseName || 'Select Stretching Exercise...'}
-                </Text>
-              </TouchableOpacity>
-
-              <View style={styles.inputColumn}>
-                <Text style={[styles.inputLabel, { color: theme.text }]}>Duration (minutes)*</Text>
+            {workoutType === 'stretching' && (
+              <View style={[styles.inputColumn, { marginBottom: 12 }]}>
+                <Text style={[styles.inputLabel, { color: theme.text }]}>Stretching Duration (minutes)</Text>
                 <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border, marginBottom: 0 }]}
                   placeholder="5"
                   placeholderTextColor={theme.textTertiary}
                   keyboardType="numeric"
@@ -526,16 +442,16 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                   onChangeText={setStretchingDuration}
                 />
               </View>
+            )}
 
-              <TouchableOpacity
-                style={[styles.addButton, { backgroundColor: theme.primary }]}
-                onPress={handleAddStretching}
-              >
-                <Ionicons name="add-circle-outline" size={20} color="white" />
-                <Text style={styles.addButtonText}>Add Exercise</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
+            <TouchableOpacity
+              style={[styles.addButton, { backgroundColor: theme.primary }]}
+              onPress={() => setShowExerciseSelection(true)}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="white" />
+              <Text style={styles.addButtonText}>Choose Exercise...</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Exercises List */}
           {Array.isArray(exercises) && exercises.length > 0 ? (
@@ -1189,7 +1105,17 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
         onClose={() => setShowExerciseSelection(false)}
         workoutType={workoutType as any}
         onSelect={(exercise) => {
-          setExerciseName(exercise.name);
+          if (exercise.type === 'gym' || exercise.type === 'calisthenics') {
+            addExercise(exercise.name, 0, exercise.type);
+            setActiveExerciseId(null);
+          } else if (exercise.type === 'cardio') {
+            addCardioActivity(exercise.name);
+          } else if (exercise.type === 'stretching') {
+            const durationSeconds = stretchingDuration ? parseInt(stretchingDuration) * 60 : 300; // default 5 minutes
+            addStretchingActivity(exercise.name, durationSeconds);
+            setStretchingDuration('');
+          }
+          Keyboard.dismiss();
         }}
       />
     </View>

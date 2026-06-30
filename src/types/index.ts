@@ -192,6 +192,8 @@ export interface MappedExercise {
   primaryMuscles: MuscleGroup[];
   secondaryMuscles: MuscleGroup[];
   difficultyMultiplier: number; // 1.0 is standard (e.g. flat bench)
+  mechanic?: 'isolation' | 'compound';
+  equipment?: 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'other';
 }
 
 // Workout Template types

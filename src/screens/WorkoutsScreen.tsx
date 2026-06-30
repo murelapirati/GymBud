@@ -630,12 +630,7 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
   };
 
   const startWorkout = () => {
-    setShowWorkoutTypeModal(true);
-  };
-
-  const handleWorkoutTypeSelected = (type: WorkoutType) => {
-    setSelectedWorkoutType(type);
-    setShowWorkoutTypeModal(false);
+    setSelectedWorkoutType('gym');
     setShowStartOptionsModal(true);
   };
 
@@ -1132,13 +1127,6 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
         )}
 
       </ScrollView>
-
-      {/* Workout Type Selection Modal */}
-      <WorkoutTypeSelectionModal
-        visible={showWorkoutTypeModal}
-        onClose={() => setShowWorkoutTypeModal(false)}
-        onSelectType={handleWorkoutTypeSelected}
-      />
 
       {/* Workout Start Options Modal */}
       <WorkoutStartOptionsModal
