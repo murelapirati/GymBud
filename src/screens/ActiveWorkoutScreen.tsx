@@ -369,16 +369,14 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
   };
   const getWorkoutTypeInfo = () => {
     switch (workoutType) {
-      case 'gym':
-        return { icon: 'barbell-outline' as keyof typeof Ionicons.glyphMap, label: 'Gym', color: '#FF6B6B' };
+      case 'strength':
+        return { icon: 'barbell-outline' as keyof typeof Ionicons.glyphMap, label: 'Strength', color: '#FF6B6B' };
       case 'cardio':
         return { icon: 'heart-outline' as keyof typeof Ionicons.glyphMap, label: 'Cardio', color: '#4ECDC4' };
-      case 'calisthenics':
-        return { icon: 'body-outline' as keyof typeof Ionicons.glyphMap, label: 'Calisthenics', color: '#95E1D3' };
       case 'stretching':
         return { icon: 'fitness-outline' as keyof typeof Ionicons.glyphMap, label: 'Stretching', color: '#F38181' };
       default:
-        return { icon: 'barbell-outline' as keyof typeof Ionicons.glyphMap, label: 'Gym', color: '#FF6B6B' };
+        return { icon: 'barbell-outline' as keyof typeof Ionicons.glyphMap, label: 'Strength', color: '#FF6B6B' };
     }
   };
 
@@ -748,10 +746,8 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                   <>
                     {/* Sets */}
                     {exercise.sets && exercise.sets.map((set, index) => {
-                      const displayWeight = exercise.type === 'gym' 
-                        ? (set as any).weight 
-                        : (set as any).extraWeight;
-                      const weightLabel = exercise.type === 'calisthenics' ? 'extra' : '';
+                      const displayWeight = (set as any).weight ?? (set as any).extraWeight;
+                      const weightLabel = '';
                       const formattedWeight = displayWeight ? formatWeight(displayWeight, measurementSystem, 1) : '';
 
                       return (
@@ -812,11 +808,11 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
                     </View>
                     <View style={styles.inputColumn}>
                       <Text style={[styles.inputLabel, { color: theme.text }]}>
-                        {getWeightLabel(measurementSystem, exercise.type === 'calisthenics')}
+                        {getWeightLabel(measurementSystem, false)}
                       </Text>
                       <TextInput
                         style={[styles.smallInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                        placeholder={exercise.type === 'calisthenics' ? '0' : (measurementSystem === 'metric' ? '60' : '135')}
+                        placeholder={measurementSystem === 'metric' ? '60' : '135'}
                         placeholderTextColor={theme.textTertiary}
                         keyboardType="numeric"
                         value={isActive ? weight : ''}
@@ -1105,7 +1101,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
         onClose={() => setShowExerciseSelection(false)}
         workoutType={workoutType as any}
         onSelect={(exercise) => {
-          if (exercise.type === 'gym' || exercise.type === 'calisthenics') {
+          if (exercise.type === 'strength') {
             addExercise(exercise.name, 0, exercise.type);
             setActiveExerciseId(null);
           } else if (exercise.type === 'cardio') {

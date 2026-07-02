@@ -7,6 +7,8 @@ import { SectionKey } from './src/utils/theme';
 import { ActiveWorkoutProvider, useActiveWorkout } from './src/context/ActiveWorkoutContext';
 import { GlobalDateProvider } from './src/context/GlobalDateContext';
 import { BodyMapProvider } from './src/context/BodyMapContext';
+import { storage, STORAGE_KEYS } from './src/utils/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ActiveWorkoutStatusBar from './src/components/ActiveWorkoutStatusBar';
 import RestTimerStatusBar from './src/components/RestTimerStatusBar';
 import GlobalDateWarning from './src/components/GlobalDateWarning';
@@ -19,6 +21,59 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import GoalsScreen from './src/screens/GoalsScreen';
 import WorkoutGoalsScreen from './src/screens/WorkoutGoalsScreen';
 import BodyMapScreen from './src/screens/BodyMapScreen';
+
+const MIGRATION_FLAG_KEY = '@gymapp_workouttype_migration_v1';
+
+const migrateWorkoutTypes = async () => {
+  try {
+    const alreadyMigrated = await AsyncStorage.getItem(MIGRATION_FLAG_KEY);
+    if (alreadyMigrated) return;
+
+    const migrateType = (t: string) =>
+      t === 'gym' || t === 'calisthenics' ? 'strength' : t;
+
+    // Migrate workout history (object keyed by date, value is array of sessions)
+    const history = await storage.getItem<Record<string, any[]>>(STORAGE_KEYS.WORKOUT_HISTORY) || {};
+    const migratedHistory: Record<string, any[]> = {};
+    for (const [date, sessions] of Object.entries(history)) {
+      migratedHistory[date] = (sessions || []).map((w: any) => ({
+        ...w,
+        workoutType: migrateType(w.workoutType || ''),
+        exercises: (w.exercises || []).map((ex: any) => ({
+          ...ex,
+          type: migrateType(ex.type || ''),
+        })),
+      }));
+    }
+    await storage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, migratedHistory);
+
+    // Migrate workout templates
+    const templates = await storage.getItem<any[]>(STORAGE_KEYS.WORKOUT_TEMPLATES) || [];
+    const migratedTemplates = templates.map((t: any) => ({
+      ...t,
+      workoutType: migrateType(t.workoutType || ''),
+      exercises: (t.exercises || []).map((ex: any) => ({
+        ...ex,
+        type: migrateType(ex.type || ''),
+      })),
+    }));
+    await storage.setItem(STORAGE_KEYS.WORKOUT_TEMPLATES, migratedTemplates);
+
+    // Migrate custom exercises
+    const customExs = await storage.getItem<any[]>(STORAGE_KEYS.CUSTOM_EXERCISES) || [];
+    const migratedCustom = customExs.map((ex: any) => ({
+      ...ex,
+      type: migrateType(ex.type || ''),
+    }));
+    await storage.setItem(STORAGE_KEYS.CUSTOM_EXERCISES, migratedCustom);
+
+    await AsyncStorage.setItem(MIGRATION_FLAG_KEY, 'done');
+    console.log('[Migration] workoutType gym/calisthenics → strength complete');
+  } catch (err) {
+    console.error('[Migration] workoutType migration failed:', err);
+  }
+};
+
 
 
 function MainApp() {
@@ -39,6 +94,11 @@ function MainApp() {
     stretchTimerCompleted,
     clearStretchTimerCompleted 
   } = useActiveWorkout();
+
+  // Run one-time data migration on mount
+  useEffect(() => {
+    migrateWorkoutTypes();
+  }, []);
 
   // Auto-navigate to rest timer screen when timer starts
   useEffect(() => {

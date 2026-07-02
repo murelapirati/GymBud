@@ -36,7 +36,7 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
   const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
 
   const [name, setName] = useState('');
-  const [type, setType] = useState<'gym' | 'calisthenics' | 'cardio' | 'stretching'>('gym');
+  const [type, setType] = useState<'strength' | 'cardio' | 'stretching'>('strength');
   const [primaryMuscles, setPrimaryMuscles] = useState<Set<MuscleGroup>>(new Set());
   const [secondaryMuscles, setSecondaryMuscles] = useState<Set<MuscleGroup>>(new Set());
   const [difficultyMultiplier, setDifficultyMultiplier] = useState(1.0);
@@ -61,7 +61,7 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
           setDifficultyMultiplier(0.5);
         }
       } else {
-        if (type === 'calisthenics') {
+        if (type === 'strength') {
           setDifficultyMultiplier(0.6);
         } else {
           setDifficultyMultiplier(1.0);
@@ -145,7 +145,7 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
     
     // Reset form
     setName('');
-    setType('gym');
+    setType('strength');
     setPrimaryMuscles(new Set());
     setSecondaryMuscles(new Set());
     setDifficultyMultiplier(1.0);
@@ -268,7 +268,7 @@ export default function CustomExercisesModal({ visible, onClose }: CustomExercis
               />
 
               <View style={[styles.typeSelector, { flexWrap: 'wrap' }]}>
-                {(['gym', 'calisthenics', 'cardio', 'stretching'] as const).map((t) => (
+                {(['strength', 'cardio', 'stretching'] as const).map((t) => (
                   <TouchableOpacity
                     key={t}
                     style={[

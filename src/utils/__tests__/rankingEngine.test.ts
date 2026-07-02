@@ -1,4 +1,4 @@
-import { calculate1RM, getRankForScore, processWorkoutForRanks, applyDecay, getMuscleProgress } from '../rankingEngine';
+import { calculate1RM, getRankForScore, processWorkoutForRanks, applyDecay, getMuscleProgress, recalculateAllScoresFromHistory } from '../rankingEngine';
 import { MuscleGroup, MuscleStatus, Workout } from '../../types';
 import { getTodayDate } from '../date';
 
@@ -90,7 +90,7 @@ describe('rankingEngine', () => {
   });
 
   describe('processWorkoutForRanks', () => {
-    it('applies 0.25 factor to secondary muscles instead of 0.50', () => {
+    it('applies 0.08 factor to secondary muscles instead of 0.25', () => {
       // Create a gym workout for chest (primary) and triceps/front_delts (secondary)
       // Barbell Bench Press: multiplier 1.0. Primary: chest, Secondary: front_delts, triceps.
       const workout: Workout = {
@@ -121,9 +121,9 @@ describe('rankingEngine', () => {
       // Intensity multiplier = 0.6 + Math.pow(7/10, 1.5) * 0.65 = 0.98066
       // Base score = 133.33 * 1.0 (multiplier) = 133.33
       // Primary (chest) factor = 1.0 -> score = 133.33 * 1.0 * 0.98066 = 130.75
-      // Secondary (triceps) factor = 0.25 -> score = 133.33 * 0.25 * 0.98066 = 32.68
+      // Secondary (triceps) factor = 0.08 -> score = 133.33 * 0.08 * 0.98066 = 10.46
       expect(updated.chest.currentScore).toBeCloseTo(130.75, 1);
-      expect(updated.triceps.currentScore).toBeCloseTo(32.68, 1);
+      expect(updated.triceps.currentScore).toBeCloseTo(10.46, 1);
     });
 
     it('scales calisthenics using biomechanical load and custom compound contribution for Dips', () => {
@@ -212,7 +212,7 @@ describe('rankingEngine', () => {
 
     it('applies a lower 0.10 factor to secondary stabilizers (abs, obliques, lower_back, forearms)', () => {
       // Barbell Squat: multiplier 1.1. Primary: quads, glutes. Secondary: hamstrings, lower_back, abs.
-      // Abs and lower_back are stabilizers, so they should get 0.10. Hamstrings is standard secondary, so 0.25.
+      // Abs and lower_back are stabilizers, so they should get 0.10. Hamstrings is standard secondary, so 0.08.
       const workout: Workout = {
         id: 'w_4',
         date: '2026-04-28',
@@ -239,10 +239,10 @@ describe('rankingEngine', () => {
       const updated = processWorkoutForRanks(workout, initialStatuses);
 
       // Score = 146.67 * 1.25 = 183.33
-      // Hamstrings (secondary) factor = 0.25 -> score = 183.33 * 0.25 = 45.83
+      // Hamstrings (secondary) factor = 0.08 -> score = 183.33 * 0.08 = 14.67
       // Abs (secondary stabilizer) factor = 0.10 -> score = 183.33 * 0.10 = 18.33
       // Lower back (secondary stabilizer) factor = 0.10 -> score = 183.33 * 0.10 = 18.33
-      expect(updated.hamstrings.currentScore).toBeCloseTo(45.83, 1);
+      expect(updated.hamstrings.currentScore).toBeCloseTo(14.67, 1);
       expect(updated.abs.currentScore).toBeCloseTo(18.33, 1);
       expect(updated.lower_back.currentScore).toBeCloseTo(18.33, 1);
     });
@@ -509,13 +509,13 @@ describe('rankingEngine', () => {
       const initialStatuses = {} as Record<MuscleGroup, MuscleStatus>;
       const updated = processWorkoutForRanks(workout, initialStatuses);
 
-      // Chest score without superset bonus:
+      // Chest score without cross-exercise superset bonus:
       // Dips chest score = 92.67 * 0.8 * 0.70 = 51.89 (maxSet).
       // Flyes chest score = (10 * 2 * 1.1) * 1.33 * 0.65 = 19.07.
-      // Flyes is superset volume (within 45s) -> 19.07 * 0.5 = 9.53.
-      // Total = 51.89 + 9.53 = 61.42.
-      // Intensity = 0.83 -> 61.42 * 0.83 = 50.97.
-      expect(updated.chest.currentScore).toBeCloseTo(50.97, 1.0);
+      // Flyes is superset volume (within 45s) -> 19.07 * 0.15 = 2.86.
+      // Total = 51.89 + 2.86 = 54.75.
+      // Intensity = 0.83 -> 54.75 * 0.83 = 45.43.
+      expect(updated.chest.currentScore).toBeCloseTo(45.43, 1.0);
     });
 
     it('scales calisthenics score based on bodyweight', () => {
@@ -627,6 +627,165 @@ describe('rankingEngine', () => {
       // Should fallback to name-sniffing and apply dumbbell mult
       // Weight = 10 * 2 * 1.1 = 22. 1RM = 29.33. Score = 29.33 * 1.0 * 0.83 = 24.34.
       expect(updated2.chest.currentScore).toBeCloseTo(24.34, 0.5);
+    });
+
+    it('applies exponential decay for volume (diminishing returns) on successive sets', () => {
+      // 3 sets of bench press (100kg x 10 reps). All completed 2 minutes apart (no superset).
+      // 1RM = 133.33. Score = 133.33 * 1.0 = 133.33.
+      // Intensity 5 -> mult = 0.83.
+      // maxSet score = 133.33.
+      // Extra set 1 (index 1): score = 133.33. decayBonus = 0.15 * Math.pow(0.4, 0) = 0.15.
+      // Extra set 2 (index 2): score = 133.33. decayBonus = 0.15 * Math.pow(0.4, 1) = 0.06.
+      // Total score before intensity = 133.33 * (1 + 0.15 + 0.06) = 133.33 * 1.21 = 161.33.
+      // Total score = 161.33 * 0.83 = 133.9.
+      const workout: Workout = {
+        id: 'w_vol_decay',
+        date: '2026-04-28',
+        intensity: 5,
+        exercises: [
+          {
+            id: 'we_vol_1',
+            name: 'Barbell Bench Press',
+            type: 'gym',
+            sets: [
+              {
+                id: 's_v1',
+                reps: 10,
+                weight: 100,
+                completed: true,
+                completedAt: new Date('2026-04-28T10:00:00Z'),
+              },
+              {
+                id: 's_v2',
+                reps: 10,
+                weight: 100,
+                completed: true,
+                completedAt: new Date('2026-04-28T10:02:00Z'),
+              },
+              {
+                id: 's_v3',
+                reps: 10,
+                weight: 100,
+                completed: true,
+                completedAt: new Date('2026-04-28T10:04:00Z'),
+              }
+            ]
+          }
+        ]
+      } as unknown as Workout;
+
+      const updated = processWorkoutForRanks(workout, {} as any);
+      expect(updated.chest.currentScore).toBeCloseTo(133.9, 1.0);
+    });
+
+    it('correctly detects index 0 as superset if followed by a compound/same-muscle set within 45s', () => {
+      // Let's do Bench Press set 1 (100kg x 10 reps) at 10:00:00 and Bench Press set 2 (100kg x 10 reps) at 10:00:30.
+      // Both sets should be marked as superset.
+      // Set 1 (maxSet): 133.33.
+      // Set 2 (extra set): 133.33. decayBonus = 0.15 (because it is superset).
+      // Total score before intensity = 133.33 * 1.15 = 153.33.
+      // Intensity 5 -> 153.33 * 0.83 = 127.2.
+      const workout: Workout = {
+        id: 'w_ss_index0',
+        date: '2026-04-28',
+        intensity: 5,
+        exercises: [
+          {
+            id: 'we_ss_i1',
+            name: 'Barbell Bench Press',
+            type: 'gym',
+            sets: [
+              {
+                id: 's_ss_i1',
+                reps: 10,
+                weight: 100,
+                completed: true,
+                completedAt: new Date('2026-04-28T10:00:00Z'),
+              },
+              {
+                id: 's_ss_i2',
+                reps: 10,
+                weight: 100,
+                completed: true,
+                completedAt: new Date('2026-04-28T10:00:30Z'),
+              }
+            ]
+          }
+        ]
+      } as unknown as Workout;
+
+      const updated = processWorkoutForRanks(workout, {} as any);
+      expect(updated.chest.currentScore).toBeCloseTo(127.2, 1.0);
+    });
+  });
+
+  describe('recalculateAllScoresFromHistory', () => {
+    it('correctly recalculates scores chronologically from history', () => {
+      // Workout 1: Bench Press on 2026-04-01
+      // Workout 2: Bench Press on 2026-04-25 (24 days later -> decay should be applied)
+      const workouts: Workout[] = [
+        {
+          id: 'w_h1',
+          date: '2026-04-25',
+          intensity: 5,
+          exercises: [
+            {
+              id: 'we_h1',
+              name: 'Barbell Bench Press',
+              type: 'gym',
+              sets: [
+                {
+                  id: 's_h1',
+                  reps: 10,
+                  weight: 100,
+                  completed: true,
+                  completedAt: new Date('2026-04-25T10:00:00Z'),
+                }
+              ]
+            }
+          ]
+        },
+        {
+          id: 'w_h2',
+          date: '2026-04-01',
+          intensity: 5,
+          exercises: [
+            {
+              id: 'we_h2',
+              name: 'Barbell Bench Press',
+              type: 'gym',
+              sets: [
+                {
+                  id: 's_h2',
+                  reps: 10,
+                  weight: 100,
+                  completed: true,
+                  completedAt: new Date('2026-04-01T10:00:00Z'),
+                }
+              ]
+            }
+          ]
+        }
+      ] as unknown as Workout[];
+
+      // Mock date is 2026-04-28.
+      // Recalculating should:
+      // 1. Sort workouts: 2026-04-01 first, then 2026-04-25.
+      // 2. Process 2026-04-01: Bench press chest score = 133.33 * 0.83 = 110.66.
+      // 3. Process 2026-04-25:
+      //    a. Apply decay: last trained 2026-04-01. reference date 2026-04-25.
+      //       diffDays = 24 days. grace period = 21 days.
+      //       over grace period = 3 days = 3/7 = 0.428 weeks.
+      //       decayFactor = Math.pow(0.98, 0.428) = 0.991.
+      //       decayedScore = 110.66 * 0.991 = 109.66.
+      //    b. Process workout: Bench press chest score = 110.66.
+      //       It is higher than decayedScore (109.66), so chest score is updated to 110.66.
+      // 4. Final decay to 2026-04-28 (today):
+      //    last trained 2026-04-25. today 2026-04-28.
+      //    diffDays = 3 days. Within grace period (21 days), so no decay.
+      //    Final chest score = 110.66.
+      const statuses = recalculateAllScoresFromHistory(workouts, [], 70);
+      expect(statuses.chest.currentScore).toBeCloseTo(110.66, 1.0);
     });
   });
 });

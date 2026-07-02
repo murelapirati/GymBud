@@ -36,7 +36,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   // Workout builder state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newWorkoutName, setNewWorkoutName] = useState('');
-  const [newWorkoutType, setNewWorkoutType] = useState<WorkoutType>('gym');
+  const [newWorkoutType, setNewWorkoutType] = useState<WorkoutType>('strength');
   const [newExercises, setNewExercises] = useState<TemplateExercise[]>([]);
   const [showTypeSelector, setShowTypeSelector] = useState(true);
   const [showExerciseSelection, setShowExerciseSelection] = useState(false);
@@ -72,7 +72,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
         setCollapsedSections(new Set(saved));
       } else {
         // Default to all collapsed
-        const allTypes: WorkoutType[] = ['gym', 'cardio', 'calisthenics', 'stretching'];
+        const allTypes: WorkoutType[] = ['strength', 'cardio', 'stretching'];
         setCollapsedSections(new Set(allTypes));
         await storage.setItem(STORAGE_KEYS.LIBRARY_COLLAPSED_SECTIONS, allTypes);
       }
@@ -163,9 +163,9 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
 
   const getWorkoutTypeIcon = (type: WorkoutType): any => {
     switch (type) {
-      case 'gym': return 'barbell';
+      case 'strength': return 'barbell';
       case 'cardio': return 'heart';
-      case 'calisthenics': return 'body';
+      ;
       case 'stretching': return 'hand-left';
       default: return 'fitness';
     }
@@ -173,9 +173,9 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
 
   const getWorkoutTypeLabel = (type: WorkoutType): string => {
     switch (type) {
-      case 'gym': return 'Gym';
+      case 'strength': return 'Strength';
       case 'cardio': return 'Cardio';
-      case 'calisthenics': return 'Calisthenics';
+      ;
       case 'stretching': return 'Stretching';
       default: return 'Workout';
     }
@@ -198,7 +198,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   const startCreateWorkout = () => {
     setEditingTemplate(null);
     setNewWorkoutName('');
-    setNewWorkoutType('gym');
+    setNewWorkoutType('strength');
     setNewExercises([]);
     setShowTypeSelector(false);
     setShowNamePrompt(false);
@@ -555,7 +555,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                 <>
                   <Text style={[styles.modalTitle, { color: theme.text }]}>Select Workout Type</Text>
                   <View style={styles.typeGrid}>
-                    {(['gym', 'cardio', 'calisthenics', 'stretching'] as WorkoutType[]).map(type => (
+                    {(['strength', 'cardio', 'stretching'] as WorkoutType[]).map(type => (
                       <TouchableOpacity
                         key={type}
                         style={[styles.typeCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
@@ -619,14 +619,38 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                         <Text style={[styles.exercisesLabel, { color: theme.textSecondary }]}>
                           {newExercises.length} exercise{newExercises.length !== 1 ? 's' : ''}
                         </Text>
-                        {newExercises.map((exercise, index) => (
+                        {newExercises.map((exercise, index) => {
+                          const eqColors: Record<string, { bg: string; text: string; border: string }> = {
+                            dumbbell:   { bg: '#3B82F622', text: '#60a5fa', border: '#3B82F644' },
+                            barbell:    { bg: '#f5955422', text: '#f59554', border: '#f5955444' },
+                            bodyweight: { bg: '#34d39922', text: '#34d399', border: '#34d39944' },
+                            cable:      { bg: theme.primary + '22', text: theme.primary, border: theme.primary + '44' },
+                            machine:    { bg: theme.surface, text: theme.textSecondary, border: theme.border },
+                          };
+                          const badge = exercise.equipment && eqColors[exercise.equipment] ? eqColors[exercise.equipment] : null;
+                          const mechLabel = exercise.mechanic ? (exercise.mechanic.charAt(0).toUpperCase() + exercise.mechanic.slice(1)) : '';
+                          return (
                           <View key={exercise.id} style={[styles.exerciseItem2, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                             <Text style={[styles.exerciseNumber2, { color: theme.textSecondary }]}>
                               {index + 1}.
                             </Text>
-                            <Text style={[styles.exerciseName2, { color: theme.text }]}>
-                              {exercise.name}
-                            </Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.exerciseName2, { color: theme.text }]}>
+                                {exercise.name}
+                              </Text>
+                              {(mechLabel || badge) ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                                  {mechLabel ? <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '500' }}>{mechLabel}</Text> : null}
+                                  {badge ? (
+                                    <View style={{ borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: badge.bg, borderColor: badge.border }}>
+                                      <Text style={{ fontSize: 11, fontWeight: '600', color: badge.text }}>
+                                        {exercise.equipment!.charAt(0).toUpperCase() + exercise.equipment!.slice(1)}
+                                      </Text>
+                                    </View>
+                                  ) : null}
+                                </View>
+                              ) : null}
+                            </View>
                             <View style={styles.exerciseItemActions}>
                               <TouchableOpacity
                                 onPress={() => moveExercise(exercise.id, 'up')}
@@ -647,7 +671,8 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                               </TouchableOpacity>
                             </View>
                           </View>
-                        ))}
+                          );
+                        })}
                       </>
                     ) : (
                       <Text style={[styles.emptyExercises, { color: theme.textSecondary }]}>
@@ -686,9 +711,11 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
             const newExercise: TemplateExercise = {
               id: Date.now().toString(),
               name: exercise.name.trim(),
-              restTimer: newWorkoutType === 'gym' || newWorkoutType === 'calisthenics' ? 90 : undefined,
+              restTimer: newWorkoutType === 'strength' ? 90 : undefined,
               duration: newWorkoutType === 'cardio' || newWorkoutType === 'stretching' ? 60 : undefined,
               type: newWorkoutType,
+              equipment: exercise.equipment,
+              mechanic: exercise.mechanic,
             };
             setNewExercises(prev => [...prev, newExercise]);
           }}

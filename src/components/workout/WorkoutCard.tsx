@@ -5,7 +5,7 @@ import { Theme } from '../../utils/theme';
 import { useMeasurementSystem } from '../../hooks/useMeasurementSystem';
 import { formatWeight } from '../../utils/measurements';
 
-export type WorkoutType = 'gym' | 'cardio' | 'calisthenics' | 'stretching';
+export type WorkoutType = 'strength' | 'cardio' | 'stretching';
 
 interface WorkoutSet {
   id: string;
@@ -73,16 +73,14 @@ export const WorkoutCard: React.FC<WorkoutCardProps> = ({
 
   const getWorkoutTypeInfo = (type?: WorkoutType) => {
     switch (type) {
-      case 'gym':
-        return { icon: 'barbell-outline' as keyof typeof Ionicons.glyphMap, label: 'Gym', color: '#FF6B6B' };
+      case 'strength':
+        return { icon: 'barbell-outline' as keyof typeof Ionicons.glyphMap, label: 'Strength', color: '#FF6B6B' };
       case 'cardio':
         return { icon: 'heart-outline' as keyof typeof Ionicons.glyphMap, label: 'Cardio', color: '#4ECDC4' };
-      case 'calisthenics':
-        return { icon: 'body-outline' as keyof typeof Ionicons.glyphMap, label: 'Calisthenics', color: '#95E1D3' };
       case 'stretching':
         return { icon: 'fitness-outline' as keyof typeof Ionicons.glyphMap, label: 'Stretching', color: '#F38181' };
       default:
-        return { icon: 'barbell-outline' as keyof typeof Ionicons.glyphMap, label: 'Gym', color: '#FF6B6B' };
+        return { icon: 'barbell-outline' as keyof typeof Ionicons.glyphMap, label: 'Strength', color: '#FF6B6B' };
     }
   };
 
@@ -174,11 +172,9 @@ export const WorkoutCard: React.FC<WorkoutCardProps> = ({
             );
           }
           
-          // Gym or Calisthenics (with sets)
-          const displayWeight = exercise.type === 'gym'
-            ? exercise.sets[0]?.weight
-            : exercise.sets[0]?.extraWeight;
-          const weightLabel = exercise.type === 'calisthenics' && displayWeight ? ' extra' : '';
+          // Strength (with sets)
+          const displayWeight = exercise.sets[0]?.weight ?? exercise.sets[0]?.extraWeight;
+          const weightLabel = '';
           const formattedWeight = displayWeight ? formatWeight(displayWeight, measurementSystem, 1) : '';
           
           return (

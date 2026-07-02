@@ -273,6 +273,32 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
     }
   };
 
+  const handleRecalculateRanks = () => {
+    Alert.alert(
+      'Recalculate Ranks',
+      'This will re-evaluate all your historical workouts using the latest progression math. Continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Recalculate',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await recalculateAllRanks();
+              Alert.alert('Success', 'All muscle ranks have been recalculated!');
+            } catch (error) {
+              console.error('Error manual recalculation:', error);
+              Alert.alert('Error', 'Failed to recalculate muscle ranks.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <KeyboardAvoidingView 
       style={[styles.container, { backgroundColor: theme.surface }]}
@@ -519,6 +545,27 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
             </View>
           </View>
         </View>
+
+        <TouchableOpacity 
+          style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+          onPress={handleRecalculateRanks}
+          activeOpacity={0.7}
+        >
+          <View style={styles.settingRow}>
+            <View style={styles.settingLeft}>
+              <View style={[styles.settingIconBg, { backgroundColor: `${theme.primary}15` }]}>
+                <Ionicons name="refresh-outline" size={20} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingTitle, { color: theme.text }]}>Recalculate Muscle Ranks</Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                  Re-evaluate all historical workouts using the latest math
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+          </View>
+        </TouchableOpacity>
 
         <TouchableOpacity 
           style={[styles.settingCard, { backgroundColor: '#F8717118', borderColor: '#F8717130' }]}

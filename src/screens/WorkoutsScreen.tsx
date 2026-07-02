@@ -630,7 +630,7 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
   };
 
   const startWorkout = () => {
-    setSelectedWorkoutType('gym');
+    setSelectedWorkoutType('strength');
     setShowStartOptionsModal(true);
   };
 

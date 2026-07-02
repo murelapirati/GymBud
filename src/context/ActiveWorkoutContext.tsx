@@ -5,7 +5,7 @@ import { WorkoutTemplate, TemplateExercise, Workout } from '../types';
 import { useBodyMap } from './BodyMapContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type WorkoutType = 'gym' | 'cardio' | 'calisthenics' | 'stretching';
+export type WorkoutType = 'strength' | 'cardio' | 'stretching';
 
 // Gym workout: sets x reps x weight
 interface GymSet {
@@ -54,7 +54,7 @@ interface StretchingActivity {
 interface WorkoutExercise {
   id: string;
   name: string;
-  type: 'gym' | 'calisthenics' | 'cardio' | 'stretching';
+  type: 'strength' | 'cardio' | 'stretching';
   // For gym and calisthenics
   sets?: (GymSet | CalisthenicsSet)[];
   restTimer?: number;
@@ -95,7 +95,7 @@ interface ActiveWorkoutContextType {
   finishWorkout: (notes?: string, intensity?: number) => void;
   cancelWorkout: () => void;
   // Gym & Calisthenics
-  addExercise: (name: string, restTimer: number, type?: 'gym' | 'calisthenics') => void;
+  addExercise: (name: string, restTimer: number) => void;
   logSet: (exerciseId: string, reps: number, weight?: number, restTime?: number, isWarmup?: boolean) => string;
   updateSet: (exerciseId: string, setId: string, reps: number, weight?: number) => void;
   deleteSet: (exerciseId: string, setId: string) => void;
@@ -283,7 +283,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
           type: template.workoutType, // Always set type from template
         };
 
-        if (template.workoutType === 'gym' || template.workoutType === 'calisthenics') {
+        if (template.workoutType === 'strength') {
           return {
             ...baseExercise,
             sets: [],
@@ -358,7 +358,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
       const workoutSession = {
         id: Date.now().toString(),
         date: dateStr,
-        workoutType: workoutType || 'gym',
+        workoutType: workoutType || 'strength',
         exercises: exercises.map(ex => ({
           id: ex.id,
           name: ex.name,
@@ -432,12 +432,12 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     setActiveRestSetId(null);
   };
 
-  const addExercise = (name: string, restTimer: number, type?: 'gym' | 'calisthenics') => {
-    const resolvedType = type || (workoutType === 'gym' ? 'gym' : workoutType === 'calisthenics' ? 'calisthenics' : 'gym');
+  const addExercise = (name: string, restTimer: number) => {
+    const resolvedType = workoutType === 'strength' ? 'strength' : (workoutType || 'strength');
     const newExercise: WorkoutExercise = {
       id: Date.now().toString(),
       name,
-      type: resolvedType,
+      type: resolvedType as 'strength' | 'cardio' | 'stretching',
       sets: [],
       restTimer,
     };
@@ -448,7 +448,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     const setId = Date.now().toString();
     setExercises(prev => prev.map(ex => {
       if (ex.id === exerciseId) {
-        const newSet: GymSet | CalisthenicsSet = ex.type === 'gym'
+        const newSet: GymSet | CalisthenicsSet = ex.type === 'strength'
           ? {
               id: setId,
               reps,
@@ -495,7 +495,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
           ...ex,
           sets: ex.sets.map(s => {
             if (s.id === setId) {
-              if (ex.type === 'gym') {
+              if (ex.type === 'strength') {
                 return { ...s, reps, weight: weight || 0 } as GymSet;
               } else {
                 return { ...s, reps, extraWeight: weight } as CalisthenicsSet;

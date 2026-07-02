@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 import { MuscleGroup, MuscleStatus, Workout, MappedExercise } from '../types';
-import { processWorkoutForRanks, applyDecay } from '../utils/rankingEngine';
+import { processWorkoutForRanks, applyDecay, recalculateAllScoresFromHistory } from '../utils/rankingEngine';
 
 // Bump this version whenever ranking engine logic changes to trigger recalculation
 const CURRENT_RANKING_VERSION = '9';
@@ -54,13 +54,7 @@ export const BodyMapProvider: React.FC<{ children: ReactNode }> = ({ children })
 
       // Start from a clean slate and reprocess every workout
       const rawBodyweight = await storage.getItem<number>(STORAGE_KEYS.USER_BODYWEIGHT) || 70;
-      let statuses = {} as Record<MuscleGroup, MuscleStatus>;
-      for (const workout of allWorkouts) {
-        statuses = processWorkoutForRanks(workout, statuses, customExercises, rawBodyweight);
-      }
-
-      // Apply decay based on current date
-      statuses = applyDecay(statuses);
+      const statuses = recalculateAllScoresFromHistory(allWorkouts, customExercises, rawBodyweight);
 
       // Save recalculated statuses and update version
       await storage.setItem(STORAGE_KEYS.MUSCLE_STATUS, statuses);
@@ -100,33 +94,35 @@ export const BodyMapProvider: React.FC<{ children: ReactNode }> = ({ children })
         setGenderState(storedGender);
       }
 
-      // Triggers debug dump to the Python helper server
-      try {
-        const history = await storage.getItem<Record<string, any[]>>(STORAGE_KEYS.WORKOUT_HISTORY) || {};
-        const customExercises = await storage.getItem<MappedExercise[]>(STORAGE_KEYS.CUSTOM_EXERCISES) || [];
-        const rawBodyweight = await storage.getItem<number>(STORAGE_KEYS.USER_BODYWEIGHT) || 70;
-        const currentStatuses = await storage.getItem<Record<MuscleGroup, MuscleStatus>>(STORAGE_KEYS.MUSCLE_STATUS) || {};
-        const payload = JSON.stringify({
-          statuses: currentStatuses,
-          history,
-          customExercises,
-          bodyweight: rawBodyweight,
-        });
+      if (__DEV__) {
+        // Triggers debug dump to the Python helper server
+        try {
+          const history = await storage.getItem<Record<string, any[]>>(STORAGE_KEYS.WORKOUT_HISTORY) || {};
+          const customExercises = await storage.getItem<MappedExercise[]>(STORAGE_KEYS.CUSTOM_EXERCISES) || [];
+          const rawBodyweight = await storage.getItem<number>(STORAGE_KEYS.USER_BODYWEIGHT) || 70;
+          const currentStatuses = await storage.getItem<Record<MuscleGroup, MuscleStatus>>(STORAGE_KEYS.MUSCLE_STATUS) || {};
+          const payload = JSON.stringify({
+            statuses: currentStatuses,
+            history,
+            customExercises,
+            bodyweight: rawBodyweight,
+          });
 
-        // Try localhost (for web) and LAN IP (for physical phone)
-        fetch('http://localhost:8082/dump', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload
-        }).catch(() => {});
+          // Try localhost (for web) and LAN IP (for physical phone)
+          fetch('http://localhost:8082/dump', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload
+          }).catch(() => {});
 
-        fetch('http://172.29.1.162:8082/dump', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload
-        }).catch(() => {});
-      } catch (dumpErr) {
-        console.log('[DebugDump] Error triggering dump:', dumpErr);
+          fetch('http://172.29.1.162:8082/dump', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload
+          }).catch(() => {});
+        } catch (dumpErr) {
+          console.log('[DebugDump] Error triggering dump:', dumpErr);
+        }
       }
     } catch (error) {
       console.error('Error loading body map data:', error);

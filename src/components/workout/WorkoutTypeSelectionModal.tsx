@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 
-export type WorkoutType = 'gym' | 'cardio' | 'calisthenics' | 'stretching';
+export type WorkoutType = 'strength' | 'cardio' | 'stretching';
 
 interface WorkoutTypeOption {
   type: WorkoutType;
@@ -28,8 +28,8 @@ interface WorkoutTypeSelectionModalProps {
 
 const workoutTypes: WorkoutTypeOption[] = [
   {
-    type: 'gym',
-    title: 'Gym Workout',
+    type: 'strength',
+    title: 'Strength Workout',
     description: 'Track sets, reps, and weight',
     icon: 'barbell-outline',
     color: '#FF6B6B',
@@ -40,13 +40,6 @@ const workoutTypes: WorkoutTypeOption[] = [
     description: 'Time-based cardio exercises',
     icon: 'heart-outline',
     color: '#4ECDC4',
-  },
-  {
-    type: 'calisthenics',
-    title: 'Calisthenics',
-    description: 'Bodyweight + optional extra weight',
-    icon: 'body-outline',
-    color: '#95E1D3',
   },
   {
     type: 'stretching',

@@ -99,8 +99,8 @@ const getMuscleContributionFactor = (exerciseName: string, muscle: MuscleGroup, 
     if (muscle === 'abs' || muscle === 'obliques' || muscle === 'lower_back' || muscle === 'forearms') {
       return 0.10;
     }
-    // Standard secondary muscle progress factor from 0.50 to 0.25 (per user request)
-    return 0.25;
+    // Standard secondary muscle progress factor from 0.25 to 0.08 (per user request)
+    return 0.08;
   }
 };
 
@@ -112,7 +112,7 @@ export const getCalibratedMultiplier = (mapping: MappedExercise): number => {
   const multiplier = mapping.difficultyMultiplier || 1.0;
   
   if (mapping.primaryMuscles.length > 0) {
-    // 1. Standard isolation/accessory check (biceps, triceps, forearms, abs, obliques, calves, side/rear delts)
+    // 1. Standard isolation/accessory check (biceps, triceps, forearms, abs, obliques, calves, side/rear/front delts)
     const isAccessoryOnly = mapping.primaryMuscles.every(m => 
       m === 'biceps' || 
       m === 'triceps' || 
@@ -121,7 +121,8 @@ export const getCalibratedMultiplier = (mapping: MappedExercise): number => {
       m === 'obliques' || 
       m === 'calves' || 
       m === 'side_delts' || 
-      m === 'rear_delts'
+      m === 'rear_delts' ||
+      m === 'front_delts'
     );
     
     if (isAccessoryOnly && multiplier > 0.5) {
@@ -189,7 +190,7 @@ export const processWorkoutForRanks = (
     const processSet = (weight: number, reps: number, completedAt?: Date) => {
       // Apply Dumbbell Rule: Dumbbell Weight * 2 * 1.1 for stability
       let effectiveWeight = weight;
-      if (isDumbbell && mapping.type === 'gym') {
+      if (isDumbbell && mapping.type === 'strength') {
         effectiveWeight = weight * 2 * 1.1;
       }
 
@@ -221,14 +222,14 @@ export const processWorkoutForRanks = (
       }
     };
 
-    if (mapping.type === 'gym') {
+    if (mapping.type === 'strength' && mapping.equipment !== 'bodyweight') {
       const gymEx = ex as unknown as GymExercise;
       gymEx.sets.forEach(set => {
         if (set.completed && set.weight && !(set as any).isWarmup) {
           processSet(set.weight, set.reps, set.completedAt);
         }
       });
-    } else if (mapping.type === 'calisthenics') {
+    } else if (mapping.equipment === 'bodyweight') {
       const caliEx = ex as unknown as CalisthenicsExercise;
       const BASE_BODYWEIGHT = bodyweight;
       const bodyweightFactor = getCalisthenicsBodyweightFactor(mapping.name);
@@ -300,27 +301,39 @@ export const processWorkoutForRanks = (
       }
 
       // Add volume bonuses
+      let extraSetIndex = 0;
       sets.forEach((s, index) => {
         if (s === maxSet) return; // Already counted as the base score
 
+        // Within-muscle-group timing check for dropsets/same-exercise supersets
         let isSuperset = false;
-        // If the set was completed within 45 seconds of the previous set for this muscle
-        if (index > 0 && s.time > 0 && sets[index - 1].time > 0) {
-          const diffMs = s.time - sets[index - 1].time;
-          // Valid rest time < 45s (dropsets/supersets). Ignore < 1s to prevent batch-log bugs
-          if (diffMs > 1000 && diffMs <= 45000) {
-            isSuperset = true;
+        if (s.time > 0) {
+          if (index > 0 && sets[index - 1].time > 0) {
+            const diffMs = s.time - sets[index - 1].time;
+            if (diffMs > 1000 && diffMs <= 45000) {
+              isSuperset = true;
+            }
+          }
+          if (index < sets.length - 1 && sets[index + 1].time > 0) {
+            const diffMs = sets[index + 1].time - s.time;
+            if (diffMs > 1000 && diffMs <= 45000) {
+              isSuperset = true;
+            }
           }
         }
 
-        // Superset/Dropset gets 50% accumulation. Normal volume gets 10%
+        let decayBonus;
         if (isSuperset) {
-          totalMuscleScore += s.score * 0.5;
+          // Same-exercise superset/dropset gets the first decay step (0.15) and does not decay
+          decayBonus = 0.15;
         } else {
-          totalMuscleScore += s.score * 0.1;
+          decayBonus = 0.15 * Math.pow(0.4, extraSetIndex);
+          extraSetIndex++;
         }
 
-        // Cross-exercise superset bonus (metabolic stress from back-to-back exercises)
+        totalMuscleScore += s.score * decayBonus;
+
+        // Cross-exercise superset bonus still applies on top
         if (s.isCrossExerciseSuperset) {
           totalMuscleScore += s.score * 0.15;
         }
@@ -376,10 +389,11 @@ const updateMuscleScore = (
  * Should be called whenever the app starts to check for missed workouts
  */
 export const applyDecay = (
-  statuses: Record<MuscleGroup, MuscleStatus>
+  statuses: Record<MuscleGroup, MuscleStatus>,
+  referenceDate?: string
 ): Record<MuscleGroup, MuscleStatus> => {
   const updatedStatuses = { ...statuses };
-  const today = new Date(getTodayDate());
+  const today = referenceDate ? new Date(referenceDate) : new Date(getTodayDate());
   const GRACE_PERIOD_DAYS = 21;
   const DECAY_RATE_WEEKLY = 0.02;
 
@@ -445,4 +459,22 @@ export const getMuscleProgress = (
     progressPercent,
     pointsRemaining,
   };
+};
+
+/**
+ * Recalculates all muscle scores from workout history starting from a clean slate.
+ */
+export const recalculateAllScoresFromHistory = (
+  workouts: Workout[],
+  customExercises: MappedExercise[],
+  bodyweight: number
+): Record<MuscleGroup, MuscleStatus> => {
+  let statuses = {} as Record<MuscleGroup, MuscleStatus>;
+  const sortedWorkouts = [...workouts].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  
+  for (const workout of sortedWorkouts) {
+    statuses = applyDecay(statuses, workout.date);
+    statuses = processWorkoutForRanks(workout, statuses, customExercises, bodyweight);
+  }
+  return applyDecay(statuses);
 };

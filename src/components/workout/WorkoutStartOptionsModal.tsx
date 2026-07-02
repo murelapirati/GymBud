@@ -21,7 +21,7 @@ interface WorkoutStartOptionsModalProps {
 const workoutTypeLabels: Record<WorkoutType, string> = {
   gym: 'Gym Workout',
   cardio: 'Cardio',
-  calisthenics: 'Calisthenics',
+  // calisthenics removed
   stretching: 'Stretching/Pilates',
 };
 

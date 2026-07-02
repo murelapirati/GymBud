@@ -72,7 +72,7 @@ export interface Recipe {
 }
 
 // Workout tracking types
-export type WorkoutType = 'gym' | 'cardio' | 'calisthenics' | 'stretching';
+export type WorkoutType = 'strength' | 'cardio' | 'stretching';
 
 export interface Exercise {
   id: string;
@@ -188,7 +188,7 @@ export interface MuscleStatus {
 export interface MappedExercise {
   id: string;
   name: string;
-  type: 'gym' | 'calisthenics' | 'cardio' | 'stretching';
+  type: 'strength' | 'cardio' | 'stretching';
   primaryMuscles: MuscleGroup[];
   secondaryMuscles: MuscleGroup[];
   difficultyMultiplier: number; // 1.0 is standard (e.g. flat bench)
@@ -211,7 +211,9 @@ export interface TemplateExercise {
   name: string;
   restTimer?: number; // for gym/calisthenics
   duration?: number; // for cardio/stretching (default duration)
-  type?: 'gym' | 'calisthenics' | 'cardio' | 'stretching'; // exercise type within template
+  type?: 'strength' | 'cardio' | 'stretching'; // exercise type within template
+  equipment?: 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'other';
+  mechanic?: 'isolation' | 'compound';
 }
 
 // Storage data structures

@@ -25,12 +25,10 @@ const ActiveWorkoutStatusBar: React.FC<ActiveWorkoutStatusBarProps> = ({ onPress
 
   const getWorkoutTypeInfo = () => {
     switch (workoutType) {
-      case 'gym':
-        return { icon: 'barbell' as keyof typeof Ionicons.glyphMap, label: 'Gym' };
+      case 'strength':
+        return { icon: 'barbell' as keyof typeof Ionicons.glyphMap, label: 'Strength' };
       case 'cardio':
         return { icon: 'heart' as keyof typeof Ionicons.glyphMap, label: 'Cardio' };
-      case 'calisthenics':
-        return { icon: 'body' as keyof typeof Ionicons.glyphMap, label: 'Calisthenics' };
       case 'stretching':
         return { icon: 'fitness' as keyof typeof Ionicons.glyphMap, label: 'Stretching' };
       default:
