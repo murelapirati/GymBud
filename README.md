@@ -46,8 +46,8 @@ npx expo start --tunnel
 - Or press `i` for iOS simulator
 
 ## Tech Stack
-- React Native 0.81.5
-- Expo SDK 54
+- React Native 0.86.3
+- Expo SDK 57
 - TypeScript
 - AsyncStorage for local data persistence
 - React Navigation for tab navigation

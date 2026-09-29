@@ -944,7 +944,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 999,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1313,7 +1313,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   recipeSelectBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   recipeSelectSheet: {

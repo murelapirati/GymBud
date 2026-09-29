@@ -321,7 +321,7 @@ export default function ExerciseSelectionModal({ visible, onClose, onSelect, wor
     return (
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[StyleSheet.absoluteFillObject, styles.overlay, { backgroundColor: theme.background, paddingTop: insets.top }]}
+        style={[StyleSheet.absoluteFill, styles.overlay, { backgroundColor: theme.background, paddingTop: insets.top }]}
       >
         <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
           <TouchableOpacity onPress={() => setShowCreateForm(false)} style={styles.closeButton}>
@@ -521,7 +521,7 @@ export default function ExerciseSelectionModal({ visible, onClose, onSelect, wor
   }
 
   return (
-    <View style={[StyleSheet.absoluteFillObject, styles.overlay, { backgroundColor: theme.background, paddingTop: insets.top }]}>
+    <View style={[StyleSheet.absoluteFill, styles.overlay, { backgroundColor: theme.background, paddingTop: insets.top }]}> 
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />

@@ -245,7 +245,7 @@ export const RecipeLogModal: React.FC<RecipeLogModalProps> = ({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.5)' },
   kvView: { justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: 24,
