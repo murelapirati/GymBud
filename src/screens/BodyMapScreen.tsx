@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useBodyMap } from '../context/BodyMapContext';
 import { rankColors } from '../utils/theme';
 import { MuscleGroup, RankTier } from '../types';
-import { MUSCLE_THRESHOLDS, getMuscleProgress } from '../utils/rankingEngine';
+import { getMuscleThresholds, getMuscleProgress } from '../utils/rankingEngine';
 
 interface BodyMapScreenProps {
   onOpenSettings: () => void;
@@ -54,7 +54,7 @@ const MUSCLE_SLUG_MAPPING: Record<MuscleGroup, string> = {
 
 const RANK_ORDER: RankTier[] = [
   'dirt', 'wood', 'iron', 'bronze', 
-  'gold', 'diamond', 'emerald', 'master', 'olympian'
+  'gold', 'platinum', 'diamond', 'emerald', 'master', 'olympian'
 ];
 
 const CATEGORIES = [
@@ -140,7 +140,7 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
 
     const color = rankColors[status.rank as keyof typeof rankColors];
     const isExpanded = expandedMuscle === muscle;
-    const thresholds = MUSCLE_THRESHOLDS[muscle] || MUSCLE_THRESHOLDS.chest;
+    const thresholds = getMuscleThresholds(muscle, gender);
 
     return (
       <TouchableOpacity 
@@ -183,7 +183,7 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
           </View>
 
           {(() => {
-            const progress = getMuscleProgress(muscle, status.currentScore);
+            const progress = getMuscleProgress(muscle, status.currentScore, gender);
             return progress.nextRank ? (
               <View style={{ marginTop: 8 }}>
                 <View style={[styles.progressBarContainer, { backgroundColor: theme.border + '30' }]}>
@@ -191,10 +191,14 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
                 </View>
                 <View style={styles.progressTextRow}>
                   <Text style={[styles.progressText, { color: theme.textTertiary }]}>
-                    {progress.progressPercent.toFixed(0)}% to {progress.nextRank}
+                    {(progress.progressPercent >= 99
+                      ? progress.progressPercent.toFixed(1)
+                      : Math.round(progress.progressPercent))}% to {progress.nextRank}
                   </Text>
                   <Text style={[styles.progressText, { color: color }]}>
-                    {Math.round(progress.pointsRemaining)} pts left
+                    {progress.pointsRemaining < 1
+                      ? `${progress.pointsRemaining.toFixed(1)} pts left`
+                      : `${Math.ceil(progress.pointsRemaining)} pts left`}
                   </Text>
                 </View>
               </View>
@@ -258,11 +262,11 @@ export default function BodyMapScreen({ onOpenSettings }: BodyMapScreenProps) {
       <View style={styles.header}>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Ranks</Text>
         <View style={styles.headerRight}>
-          <TouchableOpacity onPress={onOpenSettings} style={styles.iconButton}>
-            <Ionicons name="settings-outline" size={24} color={theme.primary} />
-          </TouchableOpacity>
           <TouchableOpacity onPress={() => setShowVisual(!showVisual)} style={styles.iconButton}>
             <Ionicons name={showVisual ? "list" : "body"} size={24} color={theme.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onOpenSettings} style={styles.iconButton}>
+            <Ionicons name="settings-outline" size={24} color={theme.primary} />
           </TouchableOpacity>
         </View>
       </View>

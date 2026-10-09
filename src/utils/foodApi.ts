@@ -2,7 +2,7 @@ import axios from 'axios';
 import { ScannedProduct } from '../types';
 
 const OPENFOODFACTS_API = 'https://world.openfoodfacts.org/api/v0/product';
-const OPENFOODFACTS_SEARCH_API = 'https://world.openfoodfacts.org/cgi/search.pl';
+const OPENFOODFACTS_SEARCH_API = 'https://world.openfoodfacts.org/api/v2/search';
 
 // Shared parser — works for both barcode lookup and search results
 const parseProductData = (product: any, barcodeOverride?: string): ScannedProduct | null => {
@@ -74,6 +74,8 @@ const parseProductData = (product: any, barcodeOverride?: string): ScannedProduc
       || product.product_name_de
       || '',
     brand: product.brands || undefined,
+    source: 'openfoodfacts',
+    confidence: 'medium',
     servingSize,
     servingSizeUnit,
     totalSize,
@@ -141,11 +143,12 @@ export const fetchProductByBarcode = async (barcode: string): Promise<ScannedPro
 export const searchFoodByText = async (query: string): Promise<ScannedProduct[]> => {
   try {
     const response = await axios.get(OPENFOODFACTS_SEARCH_API, {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'GymBud/1.0 (https://github.com/murelapirati/GymBud)',
+      },
       params: {
         search_terms: query,
-        search_simple: 1,
-        action: 'process',
-        json: 1,
         page_size: 20,
         fields: 'product_name,product_name_en,abbreviated_product_name,generic_name,nutriments,serving_size,image_url,image_front_url,brands,quantity,code',
       },

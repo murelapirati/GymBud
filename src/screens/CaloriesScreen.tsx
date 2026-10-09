@@ -27,6 +27,7 @@ import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import { ProductDetailsModal } from '../components/ProductDetailsModal';
 import { RecipeLogModal } from '../components/RecipeLogModal';
 import { fetchProductByBarcode } from '../utils/foodApi';
+import { FoodSearchResult, getFoodSourceLabel, searchFoods } from '../utils/foodSearch';
 import { ScannedProduct, CachedProduct } from '../types';
 import type { Recipe } from '../types';
 
@@ -165,6 +166,11 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
   const { theme } = useTheme();
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showFoodSearchModal, setShowFoodSearchModal] = useState(false);
+  const [foodSearchQuery, setFoodSearchQuery] = useState('');
+  const [foodSearchResults, setFoodSearchResults] = useState<FoodSearchResult[]>([]);
+  const [recentFoods, setRecentFoods] = useState<ScannedProduct[]>([]);
+  const [isSearchingFoods, setIsSearchingFoods] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -194,6 +200,22 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
     fatsPercent: 30,
   });
 
+  useEffect(() => {
+    if (!showFoodSearchModal) return undefined;
+    const query = foodSearchQuery.trim();
+    if (!query) {
+      setFoodSearchResults([]);
+      setIsSearchingFoods(false);
+      return undefined;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearchingFoods(true);
+      setFoodSearchResults(await searchFoods(query));
+      setIsSearchingFoods(false);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [foodSearchQuery, showFoodSearchModal]);
+
   const loadAllData = async () => {
     try {
       const data = await storage.getItem<DailyCaloriesData>(STORAGE_KEYS.CALORIES);
@@ -212,6 +234,25 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
     } catch (error) {
       console.error('Error loading data:', error);
     }
+  };
+
+  const loadRecentFoods = async () => {
+    const recent = await storage.getItem<ScannedProduct[]>(STORAGE_KEYS.RECENT_FOODS) || [];
+    setRecentFoods(recent);
+  };
+
+  const saveRecentFood = async (product: ScannedProduct) => {
+    const existing = await storage.getItem<ScannedProduct[]>(STORAGE_KEYS.RECENT_FOODS) || [];
+    const deduped = existing.filter(item => item.name.toLowerCase() !== product.name.toLowerCase());
+    const updated = [product, ...deduped].slice(0, 10);
+    await storage.setItem(STORAGE_KEYS.RECENT_FOODS, updated);
+    setRecentFoods(updated);
+  };
+
+  const saveUserFood = async (product: ScannedProduct) => {
+    const existing = await storage.getItem<ScannedProduct[]>(STORAGE_KEYS.USER_FOODS) || [];
+    const deduped = existing.filter(item => item.name.toLowerCase() !== product.name.toLowerCase());
+    await storage.setItem(STORAGE_KEYS.USER_FOODS, [product, ...deduped].slice(0, 100));
   };
 
   const loadEntries = async () => {
@@ -397,6 +438,9 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
       barcode,
     };
     setEntries(prev => [...prev, newEntry]);
+    if (scannedProduct) {
+      saveRecentFood(scannedProduct).catch(error => console.error('Error saving recent food:', error));
+    }
   };
 
   const totalCalories = entries.reduce((sum, entry) => sum + entry.calories, 0);
@@ -426,6 +470,7 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
         const now = new Date();
         const newEntry: FoodEntry = {
           id: Date.now().toString(),
+          name: editingName.trim() || undefined,
           protein: p,
           carbs: c,
           fats: f,
@@ -434,6 +479,24 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
           date: selectedDate,
         };
         setEntries(prev => [...prev, newEntry]);
+        if (editingName.trim()) {
+          const recentProduct: ScannedProduct = {
+            barcode: `manual:${editingName.trim().toLowerCase()}`,
+            name: editingName.trim(),
+            source: 'user_food',
+            confidence: 'estimated',
+            servingSize: 100,
+            servingSizeUnit: 'g',
+            nutriments: {
+              energyKcal: calories,
+              proteins: p,
+              carbohydrates: c,
+              fat: f,
+            },
+          };
+          saveUserFood(recentProduct).catch(error => console.error('Error saving user food:', error));
+          saveRecentFood(recentProduct).catch(error => console.error('Error saving recent food:', error));
+        }
       }
       setProtein('');
       setCarbs('');
@@ -587,7 +650,11 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
         <View style={styles.actionButtons}>
           <TouchableOpacity 
             style={[styles.addButton, { backgroundColor: theme.primary }]}
-            onPress={() => setShowAddModal(true)}
+            onPress={() => {
+              setFoodSearchQuery('');
+              setShowFoodSearchModal(true);
+              loadRecentFoods();
+            }}
           >
             <Ionicons name="add-circle-outline" size={22} color="white" />
             <Text style={styles.addButtonText}>Add Food</Text>
@@ -657,6 +724,132 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
       </ScrollView>
 
       <Modal
+        visible={showFoodSearchModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFoodSearchModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.foodSearchModalContent, { backgroundColor: theme.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Add Food</Text>
+              <TouchableOpacity onPress={() => setShowFoodSearchModal(false)}>
+                <Ionicons name="close" size={28} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              autoFocus
+              value={foodSearchQuery}
+              onChangeText={setFoodSearchQuery}
+              placeholder="Search by name..."
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.foodSearchInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+            />
+
+            <View style={styles.foodSearchActions}>
+              <TouchableOpacity
+                style={[styles.foodSearchAction, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={() => {
+                  setShowFoodSearchModal(false);
+                  setShowScannerModal(true);
+                }}
+              >
+                <Ionicons name="barcode-outline" size={20} color={theme.primary} />
+                <Text style={[styles.foodSearchActionText, { color: theme.text }]}>Scan barcode</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.foodSearchAction, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={() => {
+                  setShowFoodSearchModal(false);
+                  setEditingName(foodSearchQuery.trim());
+                  setShowAddModal(true);
+                }}
+              >
+                <Ionicons name="create-outline" size={20} color={theme.primary} />
+                <Text style={[styles.foodSearchActionText, { color: theme.text }]}>Add manually</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.foodSearchNotice, { color: theme.textTertiary }]}>
+              GymBud includes offline estimates for common foods. An internet connection can provide more current and broader results.
+            </Text>
+
+            {isSearchingFoods ? (
+              <View style={styles.foodSearchEmpty}>
+                <ActivityIndicator color={theme.primary} />
+                <Text style={[styles.emptyFoodText, { color: theme.textSecondary }]}>Searching...</Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.foodSearchResults}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.foodSearchResultsContent}
+              >
+                {!foodSearchQuery.trim() && recentFoods.length > 0 && (
+                  <Text style={[styles.foodSearchSectionTitle, { color: theme.text }]}>Recent</Text>
+                )}
+                {(foodSearchQuery.trim() ? foodSearchResults : recentFoods).map((product, index) => (
+                  <TouchableOpacity
+                    key={`${product.barcode}-${index}`}
+                    style={[styles.foodResultCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                    onPress={() => {
+                      setScannedProduct(product);
+                      setShowFoodSearchModal(false);
+                      setShowProductModal(true);
+                    }}
+                  >
+                    {product.imageUrl ? (
+                      <Image source={{ uri: product.imageUrl }} style={styles.foodResultImage} />
+                    ) : (
+                      <View style={[styles.foodResultImagePlaceholder, { backgroundColor: theme.border }]}>
+                        <Ionicons name="nutrition-outline" size={20} color={theme.textSecondary} />
+                      </View>
+                    )}
+                    <View style={styles.foodResultInfo}>
+                      <Text style={[styles.foodResultName, { color: theme.text }]} numberOfLines={1}>{product.name}</Text>
+                      {product.brand && <Text style={[styles.foodResultBrand, { color: theme.textSecondary }]} numberOfLines={1}>{product.brand}</Text>}
+                      <Text style={[styles.foodResultBrand, { color: theme.textTertiary }]} numberOfLines={1}>{getFoodSourceLabel(product.source)}</Text>
+                      <View style={styles.foodResultPills}>
+                        <Text style={[styles.foodResultPill, { color: theme.primary }]}>{Math.round(product.nutriments.energyKcal)} kcal</Text>
+                        <Text style={[styles.foodResultPill, { color: '#FF3B3B' }]}>P {product.nutriments.proteins}g</Text>
+                        <Text style={[styles.foodResultPill, { color: '#D4B900' }]}>C {product.nutriments.carbohydrates}g</Text>
+                        <Text style={[styles.foodResultPill, { color: '#C50FD6' }]}>F {product.nutriments.fat}g</Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                ))}
+                {foodSearchQuery.trim() && !isSearchingFoods && foodSearchResults.length === 0 && (
+                  <View style={styles.foodSearchEmpty}>
+                    <Text style={[styles.emptyFoodText, { color: theme.textSecondary }]}>No results for “{foodSearchQuery.trim()}”</Text>
+                  </View>
+                )}
+                {!foodSearchQuery.trim() && recentFoods.length === 0 && (
+                  <View style={styles.foodSearchEmpty}>
+                    <Text style={[styles.emptyFoodText, { color: theme.textSecondary }]}>Search for a food above</Text>
+                  </View>
+                )}
+                {foodSearchQuery.trim() && foodSearchResults.length === 0 && !isSearchingFoods && (
+                  <TouchableOpacity
+                    style={styles.manualShortcut}
+                    onPress={() => {
+                      setShowFoodSearchModal(false);
+                      setEditingName(foodSearchQuery.trim());
+                      setShowAddModal(true);
+                    }}
+                  >
+                    <Text style={[styles.manualShortcutText, { color: theme.primary }]}>
+                      Can't find it? Add “{foodSearchQuery.trim()}” manually →
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={showAddModal}
         transparent={true}
         animationType="fade"
@@ -683,18 +876,16 @@ export default function CaloriesScreen({ onOpenSettings }: CaloriesScreenProps) 
                 </View>
 
                 <ScrollView contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
-                  {editingEntry && (
-                    <View style={styles.inputGroup}>
-                      <Text style={[styles.inputLabel, { color: theme.text }]}>Name</Text>
-                      <TextInput
-                        style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                        placeholder={editingEntry.name || 'Entry name'}
-                        placeholderTextColor={theme.textSecondary}
-                        value={editingName}
-                        onChangeText={setEditingName}
-                      />
-                    </View>
-                  )}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: theme.text }]}>Name</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                      placeholder="Food name"
+                      placeholderTextColor={theme.textSecondary}
+                      value={editingName}
+                      onChangeText={setEditingName}
+                    />
+                  </View>
                   <View style={styles.inputGroup}>
                     <Text style={[styles.inputLabel, { color: theme.text }]}>Protein (grams)</Text>
                     <TextInput
@@ -1177,6 +1368,116 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 24,
     elevation: 12,
+  },
+  foodSearchModalContent: {
+    borderRadius: 24,
+    padding: 22,
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '86%',
+  },
+  foodSearchInput: {
+    borderWidth: 1,
+    borderRadius: 13,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  foodSearchActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  foodSearchAction: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  foodSearchActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  foodSearchNotice: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  foodSearchResults: {
+    maxHeight: 470,
+  },
+  foodSearchResultsContent: {
+    gap: 10,
+    paddingBottom: 8,
+  },
+  foodSearchSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  foodResultCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 10,
+  },
+  foodResultImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+  },
+  foodResultImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  foodResultInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  foodResultName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  foodResultBrand: {
+    fontSize: 11,
+  },
+  foodResultPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  foodResultPill: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  foodSearchEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 28,
+    gap: 10,
+  },
+  emptyFoodText: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  manualShortcut: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  manualShortcutText: {
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   modalHeader: {
     flexDirection: 'row',

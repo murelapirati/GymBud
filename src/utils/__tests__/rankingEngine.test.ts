@@ -1,4 +1,4 @@
-import { calculate1RM, getRankForScore, processWorkoutForRanks, applyDecay, getMuscleProgress, recalculateAllScoresFromHistory } from '../rankingEngine';
+import { calculate1RM, getRankForScore, getMuscleThresholds, processWorkoutForRanks, applyDecay, getMuscleProgress, recalculateAllScoresFromHistory } from '../rankingEngine';
 import { MuscleGroup, MuscleStatus, Workout } from '../../types';
 import { getTodayDate } from '../date';
 
@@ -37,22 +37,33 @@ describe('rankingEngine', () => {
       expect(getRankForScore('chest', 0)).toBe('dirt');
     });
 
-    it('returns wood for a score of 10 (chest is 1.0 factor)', () => {
-      // New thresholds: [0, 10, 25, 40, 55, 80, 115, 165, 225]
-      expect(getRankForScore('chest', 10)).toBe('wood');
-      expect(getRankForScore('chest', 24)).toBe('wood');
+    it('requires the recalibrated chest threshold for wood', () => {
+      expect(getRankForScore('chest', 15)).toBe('wood');
+      expect(getRankForScore('chest', 37)).toBe('wood');
     });
 
-    it('returns iron for a score of 25 (chest)', () => {
-      expect(getRankForScore('chest', 25)).toBe('iron');
+    it('requires the recalibrated chest threshold for iron', () => {
+      expect(getRankForScore('chest', 38)).toBe('iron');
+    });
+
+    it('places platinum between gold and diamond', () => {
+      expect(getRankForScore('chest', 100)).toBe('platinum');
+      expect(getRankForScore('chest', 119.9)).toBe('platinum');
+      expect(getRankForScore('chest', 120)).toBe('diamond');
+    });
+
+    it('uses lower female thresholds while keeping the score calculation unchanged', () => {
+      expect(getMuscleThresholds('chest', 'female')[5]).toBe(65);
+      expect(getRankForScore('chest', 65, 'female')).toBe('platinum');
+      expect(getRankForScore('chest', 75, 'male')).toBe('bronze');
+      expect(getMuscleThresholds('quads', 'female')[5]).toBe(103.5);
+      expect(getMuscleThresholds('abs', 'female')[5]).toBe(18.75);
     });
 
     it('returns correct rank for muscles with different thresholds (e.g. biceps)', () => {
-      // Biceps wood threshold is 3.
-      expect(getRankForScore('biceps', 3.1)).toBe('wood');
+      expect(getRankForScore('biceps', 5.1)).toBe('wood');
       
-      // Biceps diamond threshold is 28.
-      expect(getRankForScore('biceps', 29)).toBe('diamond');
+      expect(getRankForScore('biceps', 43)).toBe('diamond');
     });
   });
 
@@ -515,7 +526,7 @@ describe('rankingEngine', () => {
       // Flyes is superset volume (within 45s) -> 19.07 * 0.15 = 2.86.
       // Total = 51.89 + 2.86 = 54.75.
       // Intensity = 0.83 -> 54.75 * 0.83 = 45.43.
-      expect(updated.chest.currentScore).toBeCloseTo(45.43, 1.0);
+      expect(updated.chest.currentScore).toBeCloseTo(45.22, 1.0);
     });
 
     it('scales calisthenics score based on bodyweight', () => {
@@ -550,12 +561,12 @@ describe('rankingEngine', () => {
       // Chest thresholds: [0, 10, 25, 40, 55, 80, 115, 165, 225]
       // For score 30: index should be iron (25). next rank is bronze (40).
       // Percent = (30 - 25) / (40 - 25) = 5 / 15 = 33.33%
-      // Remaining = 40 - 30 = 10 pts.
+      // Remaining = 38 - 30 = 8 pts.
       const progress = getMuscleProgress('chest', 30);
-      expect(progress.currentRank).toBe('iron');
-      expect(progress.nextRank).toBe('bronze');
-      expect(progress.progressPercent).toBeCloseTo(33.33, 1);
-      expect(progress.pointsRemaining).toBe(10);
+      expect(progress.currentRank).toBe('wood');
+      expect(progress.nextRank).toBe('iron');
+      expect(progress.progressPercent).toBeCloseTo(65.22, 1);
+      expect(progress.pointsRemaining).toBe(8);
     });
 
     it('applies dumbbell weight scaling (Weight * 2 * 1.1) for dumbbell equipment typed exercises and name-sniffing fallback', () => {
@@ -589,7 +600,7 @@ describe('rankingEngine', () => {
       } as unknown as Workout;
 
       const updated = processWorkoutForRanks(workout, {} as any);
-      expect(updated.biceps.currentScore).toBeCloseTo(10.95, 0.5);
+      expect(updated.biceps.currentScore).toBeCloseTo(9.96, 0.5);
 
       // Exercise B: Custom exercise with no equipment field but name has 'db'
       const customDbEx = {
@@ -624,9 +635,8 @@ describe('rankingEngine', () => {
       } as unknown as Workout;
 
       const updated2 = processWorkoutForRanks(workout2, {} as any, [customDbEx]);
-      // Should fallback to name-sniffing and apply dumbbell mult
-      // Weight = 10 * 2 * 1.1 = 22. 1RM = 29.33. Score = 29.33 * 1.0 * 0.83 = 24.34.
-      expect(updated2.chest.currentScore).toBeCloseTo(24.34, 0.5);
+      // No dumbbell metadata means the entered weight is already the combined load.
+      expect(updated2.chest.currentScore).toBeCloseTo(11.06, 0.5);
     });
 
     it('applies exponential decay for volume (diminishing returns) on successive sets', () => {

@@ -52,9 +52,8 @@ export const lightThemeBase = {
   tabBarInactive: '#BBBAC5',
 
   // Workout type colors
-  gym: '#EF4444',
+  strength: '#EF4444',
   cardio: '#F87171',
-  calisthenics: '#10B981',
   stretching: '#FBBF24',
 };
 
@@ -81,9 +80,8 @@ export const darkThemeBase = {
   tabBarInactive: '#5C5A72',
 
   // Workout type colors
-  gym: '#EF4444',
+  strength: '#EF4444',
   cardio: '#F87171',
-  calisthenics: '#34D399',
   stretching: '#FBBF24',
 };
 
@@ -103,7 +101,8 @@ export const rankColors = {
   iron: '#8F9CA6',      // Cool steel / iron
   bronze: '#D27D2D',    // Polished bronze / copper
   gold: '#FFD700',      // Honey gold
-  diamond: '#14b0f8ff',   // Neon diamond blue
+  platinum: '#4FB6C2',  // Deep platinum teal
+  diamond: '#8B5CF6',    // Vivid diamond purple
   emerald: '#40e00fff',   // Electric emerald green
   master: '#FF0055',    // Hot magenta / master red
   olympian: '#aff3f8ff',  // Holy blue

@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "gymapp",
-    "slug": "gymapp",
+    "name": "GymBud",
+    "slug": "gymbud",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.gymapp",
+      "bundleIdentifier": "com.murelapirati.gymbud",
       "infoPlist": {
         "NSMotionUsageDescription": "This app uses your motion data to track your daily steps and activity.",
         "ITSAppUsesNonExemptEncryption": false
@@ -20,12 +20,9 @@
         "backgroundColor": "#5383B8"
       },
       "permissions": [
-        "ACTIVITY_RECOGNITION",
-        "android.permission.ACTIVITY_RECOGNITION",
-        "ACTIVITY_RECOGNITION",
         "android.permission.ACTIVITY_RECOGNITION"
       ],
-      "package": "com.anonymous.gymapp"
+      "package": "com.murelapirati.gymbud"
     },
     "web": {
       "favicon": "./assets/favicon.png"

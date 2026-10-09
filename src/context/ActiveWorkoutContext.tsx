@@ -1,33 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Vibration, Alert } from 'react-native';
 import { storage, STORAGE_KEYS } from '../utils/storage';
-import { WorkoutTemplate, TemplateExercise, Workout } from '../types';
+import { StrengthSet, WorkoutTemplate, TemplateExercise, Workout } from '../types';
 import { useBodyMap } from './BodyMapContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persistCompletedWorkout } from '../utils/workoutPersistence';
 
 export type WorkoutType = 'strength' | 'cardio' | 'stretching';
-
-// Gym workout: sets x reps x weight
-interface GymSet {
-  id: string;
-  reps: number;
-  weight: number;
-  completed: boolean;
-  completedAt?: Date;
-  restTime?: number;
-  isWarmup?: boolean;
-}
-
-// Calisthenics: sets x reps + optional extra weight
-interface CalisthenicsSet {
-  id: string;
-  reps: number;
-  extraWeight?: number;
-  completed: boolean;
-  completedAt?: Date;
-  restTime?: number;
-  isWarmup?: boolean;
-}
 
 // Cardio entry: duration, distance (optional), heart rate (optional)
 interface CardioActivity {
@@ -55,8 +33,8 @@ interface WorkoutExercise {
   id: string;
   name: string;
   type: 'strength' | 'cardio' | 'stretching';
-  // For gym and calisthenics
-  sets?: (GymSet | CalisthenicsSet)[];
+  // Strength sets may use external weight or optional bodyweight additions.
+  sets?: StrengthSet[];
   restTimer?: number;
   // For cardio
   duration?: number;
@@ -94,7 +72,7 @@ interface ActiveWorkoutContextType {
   startWorkoutFromTemplate: (template: WorkoutTemplate) => Promise<void>;
   finishWorkout: (notes?: string, intensity?: number) => void;
   cancelWorkout: () => void;
-  // Gym & Calisthenics
+  // Strength workouts
   addExercise: (name: string, restTimer: number) => void;
   logSet: (exerciseId: string, reps: number, weight?: number, restTime?: number, isWarmup?: boolean) => string;
   updateSet: (exerciseId: string, setId: string, reps: number, weight?: number) => void;
@@ -330,13 +308,12 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
       setActiveRestSetId(null);
 
       // Update template's lastUsed timestamp
-      const stored = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUT_TEMPLATES);
-      if (stored) {
-        const templates: WorkoutTemplate[] = JSON.parse(stored);
+      const templates = await storage.getItem<WorkoutTemplate[]>(STORAGE_KEYS.WORKOUT_TEMPLATES);
+      if (templates) {
         const updated = templates.map(t => 
           t.id === template.id ? { ...t, lastUsed: Date.now() } : t
         );
-        await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_TEMPLATES, JSON.stringify(updated));
+        await storage.setItem(STORAGE_KEYS.WORKOUT_TEMPLATES, updated);
       }
     } catch (error) {
       console.error('Error starting workout from template:', error);
@@ -380,30 +357,11 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
       // Update Muscle Ranks
       await updateRanksFromWorkout(workoutSession as any as Workout);
 
-      // Save to workout history
-      const history = await storage.getItem<any>(STORAGE_KEYS.WORKOUT_HISTORY) || {};
-      // Support multiple workouts per day - store as array
-      if (!history[dateStr] || !Array.isArray(history[dateStr])) {
-        history[dateStr] = [];
-      }
-      history[dateStr].push(workoutSession);
-      await storage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, history);
-
-      // Update daily activity
-      const dailyActivity = await storage.getItem<any>(STORAGE_KEYS.DAILY_ACTIVITY) || {};
-      const existingActivity = dailyActivity[dateStr] || {
-        date: dateStr,
-        steps: 0,
-        exerciseMinutes: 0,
-        caloriesBurned: 0,
-      };
-      existingActivity.exerciseMinutes += durationMinutes;
-      // Calorie calculation based on intensity: 3-10 cal/min (3 + intensity*0.7)
-      const caloriesPerMinute = intensity !== undefined ? (3 + intensity * 0.7) : 5;
-      existingActivity.caloriesBurned += Math.floor(durationMinutes * caloriesPerMinute);
-      existingActivity.lastUpdated = Date.now(); // Track when this was saved
-      dailyActivity[dateStr] = existingActivity;
-      await storage.setItem(STORAGE_KEYS.DAILY_ACTIVITY, dailyActivity);
+      await persistCompletedWorkout(
+        workoutSession as unknown as Parameters<typeof persistCompletedWorkout>[0],
+        durationMinutes,
+        intensity,
+      );
     } catch (error) {
       console.error('Error saving workout:', error);
     }
@@ -448,7 +406,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     const setId = Date.now().toString();
     setExercises(prev => prev.map(ex => {
       if (ex.id === exerciseId) {
-        const newSet: GymSet | CalisthenicsSet = ex.type === 'strength'
+        const newSet: StrengthSet = ex.type === 'strength'
           ? {
               id: setId,
               reps,
@@ -496,9 +454,9 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
           sets: ex.sets.map(s => {
             if (s.id === setId) {
               if (ex.type === 'strength') {
-                return { ...s, reps, weight: weight || 0 } as GymSet;
+                return { ...s, reps, weight: weight || 0 } as StrengthSet;
               } else {
-                return { ...s, reps, extraWeight: weight } as CalisthenicsSet;
+                return { ...s, reps, extraWeight: weight } as StrengthSet;
               }
             }
             return s;

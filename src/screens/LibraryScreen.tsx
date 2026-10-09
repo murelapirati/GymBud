@@ -15,7 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { storage, STORAGE_KEYS } from '../utils/storage';
-import type { WorkoutTemplate, WorkoutType, TemplateExercise, Recipe } from '../types';
+import type { WorkoutTemplate, WorkoutType, TemplateExercise, Recipe, LibraryFolder, LibraryFolderType } from '../types';
 import RecipeEditScreen from './RecipeEditScreen';
 import ExerciseSelectionModal from '../components/ExerciseSelectionModal';
 
@@ -32,6 +32,12 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [showRecipeEdit, setShowRecipeEdit] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | undefined>(undefined);
+  const [folders, setFolders] = useState<LibraryFolder[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [folderType, setFolderType] = useState<LibraryFolderType>('recipes');
+  const [newFolderParentId, setNewFolderParentId] = useState<string | undefined>();
 
   // Workout builder state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -42,6 +48,8 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   const [showExerciseSelection, setShowExerciseSelection] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<WorkoutTemplate | null>(null);
+  const [newWorkoutFolderId, setNewWorkoutFolderId] = useState<string | undefined>();
+  const [newRecipeFolderId, setNewRecipeFolderId] = useState<string | undefined>();
   const [collapsedSections, setCollapsedSections] = useState<Set<WorkoutType>>(new Set());
 
   const toggleSection = async (workoutType: WorkoutType) => {
@@ -65,6 +73,36 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
     }
   };
 
+  const moveRecipe = async (recipe: Recipe) => {
+    const options = ['Unfiled', ...folders.filter(folder => folder.type === 'recipes').map(folder => folderPath(folder)), 'Cancel'];
+    Alert.alert('Move Recipe', 'Choose a folder', options.map((label, index) => ({
+      text: label,
+      style: label === 'Cancel' ? 'cancel' : undefined,
+      onPress: async () => {
+        if (label === 'Cancel') return;
+        const folder = folders.find(item => item.type === 'recipes' && folderPath(item) === label);
+        const updated = recipes.map(item => item.id === recipe.id ? { ...item, folderId: folder?.id } : item);
+        await storage.setItem(STORAGE_KEYS.RECIPES, updated);
+        setRecipes(updated);
+      },
+    })));
+  };
+
+  const moveTemplate = async (template: WorkoutTemplate) => {
+    const options = ['Unfiled', ...folders.filter(folder => folder.type === 'templates').map(folder => folderPath(folder)), 'Cancel'];
+    Alert.alert('Move Workout', 'Choose a folder', options.map((label) => ({
+      text: label,
+      style: label === 'Cancel' ? 'cancel' : undefined,
+      onPress: async () => {
+        if (label === 'Cancel') return;
+        const folder = folders.find(item => item.type === 'templates' && folderPath(item) === label);
+        const updated = templates.map(item => item.id === template.id ? { ...item, folderId: folder?.id } : item);
+        await storage.setItem(STORAGE_KEYS.WORKOUT_TEMPLATES, updated);
+        setTemplates(updated);
+      },
+    })));
+  };
+
   const loadCollapsedSections = async () => {
     try {
       const saved = await storage.getItem<WorkoutType[]>(STORAGE_KEYS.LIBRARY_COLLAPSED_SECTIONS);
@@ -85,7 +123,59 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
     loadCollapsedSections();
     loadTemplates();
     loadRecipes();
+    loadFolders();
   }, []);
+
+  const loadFolders = async () => {
+    const saved = await storage.getItem<LibraryFolder[]>(STORAGE_KEYS.LIBRARY_FOLDERS) || [];
+    setFolders(saved);
+  };
+
+  const createFolder = async () => {
+    const name = newFolderName.trim();
+    if (!name) return;
+    const parent = newFolderParentId ? folders.find(folder => folder.id === newFolderParentId) : undefined;
+    if (parent?.parentId) {
+      Alert.alert('Folder limit reached', 'Folders can only be nested one level deep.');
+      return;
+    }
+    const folder: LibraryFolder = {
+      id: `${folderType}-${Date.now()}`,
+      name,
+      type: folderType,
+      createdAt: Date.now(),
+      parentId: newFolderParentId,
+    };
+    const updated = [...folders, folder];
+    await storage.setItem(STORAGE_KEYS.LIBRARY_FOLDERS, updated);
+    setFolders(updated);
+    setNewFolderName('');
+    setNewFolderParentId(undefined);
+    setShowFolderModal(false);
+  };
+
+  const openFolderModal = (type: LibraryFolderType, parentId?: string) => {
+    setFolderType(type);
+    setNewFolderParentId(parentId);
+    setNewFolderName('');
+    setShowFolderModal(true);
+  };
+
+  const folderName = (folderId?: string) => folders.find(folder => folder.id === folderId)?.name;
+  const folderPath = (folder: LibraryFolder): string => {
+    const parent = folder.parentId ? folders.find(item => item.id === folder.parentId) : undefined;
+    return parent ? `${parent.name} / ${folder.name}` : folder.name;
+  };
+  const activeFolderType: LibraryFolderType = activeTab === 'recipes' ? 'recipes' : 'templates';
+  const selectedFolder = selectedFolderId ? folders.find(folder => folder.id === selectedFolderId) : undefined;
+  const currentFolders = folders.filter(folder =>
+    folder.type === activeFolderType &&
+    (selectedFolderId ? folder.parentId === selectedFolderId : !folder.parentId)
+  );
+  const visibleRecipes = recipes.filter(recipe => recipe.folderId === (selectedFolderId || undefined));
+  const visibleTemplates = templates.filter(template => template.folderId === (selectedFolderId || undefined));
+  const openFolder = (folderId: string) => setSelectedFolderId(folderId);
+  const goToParentFolder = () => setSelectedFolderId(selectedFolder?.parentId || null);
 
   const loadRecipes = async () => {
     try {
@@ -99,12 +189,13 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
   const handleSaveRecipe = async (recipe: Recipe) => {
     try {
       const updated = editingRecipe
-        ? recipes.map(r => r.id === recipe.id ? recipe : r)
-        : [...recipes, recipe];
+        ? recipes.map(r => r.id === recipe.id ? { ...recipe, folderId: newRecipeFolderId ?? r.folderId } : r)
+        : [...recipes, { ...recipe, folderId: newRecipeFolderId }];
       await storage.setItem(STORAGE_KEYS.RECIPES, updated);
       setRecipes(updated);
       setShowRecipeEdit(false);
       setEditingRecipe(undefined);
+      setNewRecipeFolderId(undefined);
     } catch (error) {
       console.error('Error saving recipe:', error);
       Alert.alert('Error', 'Failed to save recipe.');
@@ -200,6 +291,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
     setNewWorkoutName('');
     setNewWorkoutType('strength');
     setNewExercises([]);
+    setNewWorkoutFolderId(selectedFolderId || undefined);
     setShowTypeSelector(false);
     setShowNamePrompt(false);
     setShowCreateModal(true);
@@ -210,6 +302,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
     setNewWorkoutName(template.name);
     setNewWorkoutType(template.workoutType);
     setNewExercises(template.exercises);
+    setNewWorkoutFolderId(template.folderId);
     setShowTypeSelector(false);
     setShowNamePrompt(false);
     setShowCreateModal(true);
@@ -274,7 +367,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
         // Update existing template
         const updatedTemplates = templates.map(t =>
           t.id === editingTemplate.id
-            ? { ...t, name: newWorkoutName.trim(), exercises: newExercises }
+            ? { ...t, name: newWorkoutName.trim(), exercises: newExercises, folderId: newWorkoutFolderId }
             : t
         );
         await storage.setItem(STORAGE_KEYS.WORKOUT_TEMPLATES, updatedTemplates);
@@ -288,6 +381,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
           workoutType: newWorkoutType,
           exercises: newExercises,
           createdAt: Date.now(),
+          folderId: newWorkoutFolderId,
         };
         const updatedTemplates = [...templates, newTemplate];
         await storage.setItem(STORAGE_KEYS.WORKOUT_TEMPLATES, updatedTemplates);
@@ -299,7 +393,9 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
       setShowNamePrompt(false);
       setNewWorkoutName('');
       setNewExercises([]);
+      setNewWorkoutFolderId(undefined);
       setEditingTemplate(null);
+      setNewWorkoutFolderId(undefined);
     } catch (error) {
       console.error('Error saving workout:', error);
       Alert.alert('Error', 'Failed to save workout');
@@ -346,7 +442,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
       <View style={[styles.tabContainer, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'recipes' && styles.activeTabButton]}
-          onPress={() => setActiveTab('recipes')}
+          onPress={() => { setActiveTab('recipes'); setSelectedFolderId(null); }}
         >
           <Ionicons
             name="restaurant-outline"
@@ -366,7 +462,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
 
         <TouchableOpacity
           style={[styles.tabButton, activeTab === 'templates' && styles.activeTabButton]}
-          onPress={() => setActiveTab('templates')}
+          onPress={() => { setActiveTab('templates'); setSelectedFolderId(null); }}
         >
           <Ionicons
             name="barbell-outline"
@@ -385,10 +481,70 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.folderToolbar}>
+        <View style={styles.breadcrumbRow}>
+          {selectedFolderId && (
+            <TouchableOpacity onPress={goToParentFolder} style={styles.backFolderButton}>
+              <Ionicons name="arrow-back" size={18} color={theme.primary} />
+            </TouchableOpacity>
+          )}
+          <Text style={[styles.breadcrumbText, { color: theme.text }]}>
+            {selectedFolder ? folderPath(selectedFolder) : 'Library'}
+          </Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.folderList}>
+          <TouchableOpacity
+            style={[styles.folderChip, { borderColor: !selectedFolderId ? theme.primary : theme.border, backgroundColor: !selectedFolderId ? theme.primary + '18' : theme.card }]}
+            onPress={() => setSelectedFolderId(null)}
+          >
+            <Ionicons name="home-outline" size={16} color={!selectedFolderId ? theme.primary : theme.textSecondary} />
+            <Text style={[styles.folderChipText, { color: !selectedFolderId ? theme.primary : theme.textSecondary }]}>Root</Text>
+          </TouchableOpacity>
+          {currentFolders.map(folder => (
+            <TouchableOpacity
+              key={folder.id}
+              style={[styles.folderChip, { borderColor: theme.border, backgroundColor: theme.card }]}
+              onPress={() => openFolder(folder.id)}
+            >
+              <Ionicons name="folder-outline" size={16} color={theme.primary} />
+              <Text style={[styles.folderChipText, { color: theme.text }]}>{folder.name}</Text>
+            </TouchableOpacity>
+          ))}
+          {(!selectedFolder || !selectedFolder.parentId) && (
+            <TouchableOpacity
+              style={[styles.addFolderChip, { borderColor: theme.primary }]}
+              onPress={() => openFolderModal(activeFolderType, selectedFolderId || undefined)}
+            >
+              <Ionicons name="add" size={17} color={theme.primary} />
+              <Text style={[styles.folderChipText, { color: theme.primary }]}>
+                {selectedFolderId ? 'New subfolder' : 'New folder'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </View>
+
       {/* Content */}
       <ScrollView style={styles.content}>
+        {currentFolders.length > 0 && (
+          <View style={styles.folderGrid}>
+            {currentFolders.map(folder => (
+              <TouchableOpacity
+                key={folder.id}
+                style={[styles.folderCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+                onPress={() => openFolder(folder.id)}
+              >
+                <Ionicons name="folder" size={28} color={theme.primary} />
+                <Text style={[styles.folderCardName, { color: theme.text }]} numberOfLines={1}>{folder.name}</Text>
+                <Text style={[styles.folderCardMeta, { color: theme.textSecondary }]}>
+                  {folders.some(item => item.parentId === folder.id) ? 'Subfolders' : 'Open folder'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         {activeTab === 'recipes' ? (
-          recipes.length === 0 ? (
+          visibleRecipes.length === 0 && currentFolders.length === 0 ? (
             <View style={[styles.emptyState, { backgroundColor: theme.card }]}>
               <Ionicons name="restaurant-outline" size={64} color={theme.textSecondary} />
               <Text style={[styles.emptyTitle, { color: theme.text }]}>No Recipes Yet</Text>
@@ -397,7 +553,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
               </Text>
               <TouchableOpacity
                 style={[styles.createButton, { backgroundColor: theme.primary }]}
-                onPress={() => { setEditingRecipe(undefined); setShowRecipeEdit(true); }}
+                onPress={() => { setEditingRecipe(undefined); setNewRecipeFolderId(selectedFolderId || undefined); setShowRecipeEdit(true); }}
               >
                 <Ionicons name="add" size={24} color="#FFFFFF" />
                 <Text style={styles.createButtonText}>New Recipe</Text>
@@ -405,11 +561,11 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
             </View>
           ) : (
             <View style={{ paddingBottom: 80 }}>
-              {recipes.map(recipe => (
+              {visibleRecipes.map(recipe => (
                 <TouchableOpacity
                   key={recipe.id}
                   style={[styles.recipeCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-                  onPress={() => { setEditingRecipe(recipe); setShowRecipeEdit(true); }}
+                  onPress={() => { setEditingRecipe(recipe); setNewRecipeFolderId(recipe.folderId); setShowRecipeEdit(true); }}
                 >
                   {recipe.imageUri ? (
                     <Image
@@ -430,12 +586,20 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                     <Text style={[styles.recipeCardMacros, { color: theme.primary }]}>
                       {recipe.totalCalories} kcal total · {Math.round(recipe.totalCalories / recipe.servings)} kcal/serving
                     </Text>
+                    {folderName(recipe.folderId) && (
+                      <Text style={[styles.recipeCardMeta, { color: theme.textTertiary }]}>
+                        {folderName(recipe.folderId)}
+                      </Text>
+                    )}
                   </View>
                   <TouchableOpacity
                     onPress={() => handleDeleteRecipe(recipe.id)}
                     style={styles.recipeDeleteBtn}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
+                    <TouchableOpacity onPress={() => moveRecipe(recipe)} style={styles.recipeMoveBtn}>
+                      <Ionicons name="folder-open-outline" size={19} color={theme.primary} />
+                    </TouchableOpacity>
                     <Ionicons name="trash-outline" size={20} color={theme.error} />
                   </TouchableOpacity>
                 </TouchableOpacity>
@@ -444,7 +608,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
           )
         ) : (
           <>
-            {templates.length === 0 ? (
+            {visibleTemplates.length === 0 && currentFolders.length === 0 ? (
               <View style={[styles.emptyState, { backgroundColor: theme.card }]}>
                 <Ionicons name="barbell-outline" size={64} color={theme.textSecondary} />
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>No Workouts Yet</Text>
@@ -461,7 +625,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
               </View>
             ) : (
               <View style={{ paddingBottom: 80 }}>
-                {templates.map(template => (
+                {visibleTemplates.map(template => (
                   <View
                     key={template.id}
                     style={[styles.templateCard, { backgroundColor: theme.card, borderColor: theme.border }]}
@@ -481,6 +645,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                           </Text>
                           <Text style={[styles.templateMeta, { color: theme.textSecondary }]}>
                             {template.exercises.length} exercise{template.exercises.length !== 1 ? 's' : ''} • Created {formatDate(template.createdAt)}
+                            {folderName(template.folderId) ? ` • ${folderName(template.folderId)}` : ''}
                           </Text>
                         </View>
                       </View>
@@ -490,6 +655,9 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                           style={styles.editButton}
                         >
                           <Ionicons name="create-outline" size={20} color={theme.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => moveTemplate(template)} style={styles.editButton}>
+                          <Ionicons name="folder-open-outline" size={20} color={theme.primary} />
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => deleteTemplate(template.id)}
@@ -532,7 +700,7 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
       {activeTab === 'recipes' && recipes.length > 0 && (
         <TouchableOpacity
           style={[styles.floatingButton, { backgroundColor: theme.primary }]}
-          onPress={() => { setEditingRecipe(undefined); setShowRecipeEdit(true); }}
+          onPress={() => { setEditingRecipe(undefined); setNewRecipeFolderId(selectedFolderId || undefined); setShowRecipeEdit(true); }}
         >
           <Ionicons name="add" size={28} color="#FFFFFF" />
         </TouchableOpacity>
@@ -591,6 +759,33 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
                       />
                     </View>
                   )}
+
+                  <View style={styles.folderPickerSection}>
+                    <Text style={[styles.editNameLabel, { color: theme.textSecondary }]}>Folder</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.folderList}>
+                      <TouchableOpacity
+                        style={[styles.folderChip, { borderColor: !newWorkoutFolderId ? theme.primary : theme.border }]}
+                        onPress={() => setNewWorkoutFolderId(undefined)}
+                      >
+                        <Text style={[styles.folderChipText, { color: !newWorkoutFolderId ? theme.primary : theme.textSecondary }]}>Unfiled</Text>
+                      </TouchableOpacity>
+                      {folders.filter(folder => folder.type === 'templates').map(folder => (
+                        <TouchableOpacity
+                          key={folder.id}
+                          style={[styles.folderChip, { borderColor: newWorkoutFolderId === folder.id ? theme.primary : theme.border }]}
+                          onPress={() => setNewWorkoutFolderId(folder.id)}
+                        >
+                          <Text style={[styles.folderChipText, { color: newWorkoutFolderId === folder.id ? theme.primary : theme.textSecondary }]}>{folderPath(folder)}</Text>
+                        </TouchableOpacity>
+                      ))}
+                      <TouchableOpacity
+                        onPress={() => openFolderModal('templates', selectedFolder && !selectedFolder.parentId ? selectedFolder.id : undefined)}
+                        style={[styles.addFolderChip, { borderColor: theme.primary }]}
+                      >
+                        <Ionicons name="add" size={16} color={theme.primary} />
+                      </TouchableOpacity>
+                    </ScrollView>
+                  </View>
 
                   <TouchableOpacity
                     style={[
@@ -722,6 +917,38 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
         />
       </Modal>
 
+      <Modal
+        visible={showFolderModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFolderModal(false)}
+      >
+        <View style={styles.folderModalOverlay}>
+          <View style={[styles.folderModal, { backgroundColor: theme.card }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              New {newFolderParentId ? 'Subfolder' : ''} {folderType === 'recipes' ? 'Recipe' : 'Workout'} Folder
+            </Text>
+            <TextInput
+              autoFocus
+              value={newFolderName}
+              onChangeText={setNewFolderName}
+              placeholder="Folder name"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.editNameInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+              onSubmitEditing={createFolder}
+            />
+            <View style={styles.buttonRow}>
+              <TouchableOpacity style={[styles.modalButton, styles.cancelButtonOutline, { borderColor: theme.border }]} onPress={() => setShowFolderModal(false)}>
+                <Text style={[styles.cancelButtonText, { color: theme.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, styles.saveButton, { backgroundColor: theme.primary }]} onPress={createFolder}>
+                <Text style={styles.saveButtonText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Workout Name Prompt Modal */}
       <Modal
         visible={showNamePrompt}
@@ -823,6 +1050,80 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
+  },
+  folderToolbar: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  breadcrumbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  backFolderButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  breadcrumbText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  folderList: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  folderGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+  },
+  folderCard: {
+    width: '48%',
+    minHeight: 92,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    justifyContent: 'space-between',
+  },
+  folderCardName: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginTop: 8,
+  },
+  folderCardMeta: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  folderChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  addFolderChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 18,
+    borderStyle: 'dashed',
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  folderChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  folderPickerSection: {
+    marginBottom: 16,
   },
   emptyState: {
     marginTop: 60,
@@ -1017,6 +1318,25 @@ const styles = StyleSheet.create({
   },
   recipeDeleteBtn: {
     padding: 12,
+    gap: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recipeMoveBtn: {
+    padding: 2,
+  },
+  folderModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 24,
+  },
+  folderModal: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 20,
+    padding: 20,
   },
   modalOverlay: {
     flex: 1,
@@ -1216,4 +1536,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-

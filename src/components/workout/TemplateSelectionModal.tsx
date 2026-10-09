@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
-import { WorkoutTemplate } from '../../types';
+import { LibraryFolder, WorkoutTemplate } from '../../types';
 import { WorkoutType } from './WorkoutTypeSelectionModal';
 import { STORAGE_KEYS } from '../../utils/storage';
 
@@ -30,10 +30,13 @@ export const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
+  const [folders, setFolders] = useState<LibraryFolder[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (visible) {
+      setSelectedFolderId(null);
       loadTemplates();
     }
   }, [visible]);
@@ -42,6 +45,8 @@ export const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
     try {
       setLoading(true);
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUT_TEMPLATES);
+      const storedFolders = await AsyncStorage.getItem(STORAGE_KEYS.LIBRARY_FOLDERS);
+      setFolders(storedFolders ? JSON.parse(storedFolders) : []);
       if (stored) {
         const allTemplates: WorkoutTemplate[] = JSON.parse(stored);
         // Sort by last used (most recent first), then by created date
@@ -53,7 +58,7 @@ export const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
           if (b.lastUsed) return 1;
           return b.createdAt - a.createdAt;
         });
-        setTemplates(allTemplates);
+        setTemplates(workoutType ? allTemplates.filter(template => template.workoutType === workoutType) : allTemplates);
       } else {
         setTemplates([]);
       }
@@ -69,6 +74,24 @@ export const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
   const handleSelectTemplate = (template: WorkoutTemplate) => {
     onSelectTemplate(template);
     onClose();
+  };
+
+  const currentFolder = selectedFolderId
+    ? folders.find(folder => folder.id === selectedFolderId)
+    : undefined;
+  const currentFolders = folders.filter(folder =>
+    folder.type === 'templates' &&
+    (selectedFolderId ? folder.parentId === selectedFolderId : !folder.parentId)
+  );
+  const visibleTemplates = templates.filter(template =>
+    template.folderId === (selectedFolderId || undefined)
+  );
+  const folderPath = (folder: LibraryFolder): string => {
+    const parent = folder.parentId ? folders.find(item => item.id === folder.parentId) : undefined;
+    return parent ? `${parent.name} / ${folder.name}` : folder.name;
+  };
+  const goToParentFolder = () => {
+    setSelectedFolderId(currentFolder?.parentId || null);
   };
 
   const formatDate = (timestamp: number) => {
@@ -94,9 +117,16 @@ export const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
       <View style={styles.modalOverlay}>
         <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
           <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Select Template
-            </Text>
+            <View style={styles.titleWithBreadcrumb}>
+              {selectedFolderId && (
+                <TouchableOpacity onPress={goToParentFolder} style={styles.backButton}>
+                  <Ionicons name="arrow-back" size={18} color={theme.primary} />
+                </TouchableOpacity>
+              )}
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                {currentFolder ? folderPath(currentFolder) : 'Select Template'}
+              </Text>
+            </View>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={28} color={theme.text} />
             </TouchableOpacity>
@@ -108,7 +138,7 @@ export const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
                 Loading templates...
               </Text>
             </View>
-          ) : templates.length === 0 ? (
+          ) : visibleTemplates.length === 0 && currentFolders.length === 0 ? (
             <View style={styles.centerContent}>
               <Ionicons name="document-outline" size={48} color={theme.textSecondary} style={styles.emptyIcon} />
               <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
@@ -120,7 +150,28 @@ export const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
             </View>
           ) : (
             <ScrollView contentContainerStyle={styles.scrollContent}>
-              {templates.map((template) => (
+              {currentFolders.map(folder => (
+                <TouchableOpacity
+                  key={folder.id}
+                  style={[
+                    styles.folderCard,
+                    { backgroundColor: theme.surface, borderColor: theme.border },
+                  ]}
+                  onPress={() => setSelectedFolderId(folder.id)}
+                >
+                  <View style={styles.folderIcon}>
+                    <Ionicons name="folder" size={28} color={theme.primary} />
+                  </View>
+                  <View style={styles.folderInfo}>
+                    <Text style={[styles.folderName, { color: theme.text }]}>{folder.name}</Text>
+                    <Text style={[styles.folderMeta, { color: theme.textSecondary }]}>
+                      {folders.some(item => item.parentId === folder.id) ? 'Subfolders' : 'Open folder'}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+                </TouchableOpacity>
+              ))}
+              {visibleTemplates.map((template) => (
                 <TouchableOpacity
                   key={template.id}
                   style={[
@@ -130,9 +181,16 @@ export const TemplateSelectionModal: React.FC<TemplateSelectionModalProps> = ({
                   onPress={() => handleSelectTemplate(template)}
                 >
                   <View style={styles.templateHeader}>
-                    <Text style={[styles.templateName, { color: theme.text }]}>
-                      {template.name}
-                    </Text>
+                    <View style={styles.templateTitleRow}>
+                      <Text style={[styles.templateName, { color: theme.text }]}>
+                        {template.name}
+                      </Text>
+                      {template.id.startsWith('default_') && (
+                        <View style={[styles.defaultBadge, { backgroundColor: theme.border }]}>
+                          <Text style={[styles.defaultBadgeText, { color: theme.textSecondary }]}>Default</Text>
+                        </View>
+                      )}
+                    </View>
                     <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
                   </View>
                   <View style={styles.templateMeta}>
@@ -209,6 +267,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.3,
   },
+  titleWithBreadcrumb: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  backButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scrollContent: {
     gap: 12,
   },
@@ -242,15 +313,56 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
+  folderCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  folderIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  folderInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  folderName: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  folderMeta: {
+    fontSize: 13,
+  },
   templateHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  templateTitleRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   templateName: {
     fontSize: 16,
     fontWeight: '700',
     flex: 1,
+  },
+  defaultBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  defaultBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   templateMeta: {
     flexDirection: 'row',

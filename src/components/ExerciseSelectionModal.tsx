@@ -108,7 +108,7 @@ export default function ExerciseSelectionModal({ visible, onClose, onSelect, wor
   const [secondaryMuscles, setSecondaryMuscles] = useState<Set<MuscleGroup>>(new Set());
   const [difficultyMultiplier, setDifficultyMultiplier] = useState(1.0);
   const [equipmentFilter, setEquipmentFilter] = useState<MappedExercise['equipment'] | 'all'>('all');
-  const [newEquipment, setNewEquipment] = useState<MappedExercise['equipment']>('other');
+  const [newEquipment, setNewEquipment] = useState<NonNullable<MappedExercise['equipment']>>('other');
   const [selectedPrimaryGroup, setSelectedPrimaryGroup] = useState<MuscleGroup | 'shoulders' | null>(null);
   const [mechanic, setMechanic] = useState<'compound' | 'isolation'>('compound');
 
@@ -272,6 +272,7 @@ export default function ExerciseSelectionModal({ visible, onClose, onSelect, wor
       difficultyMultiplier: finalMultiplier,
       mechanic: newType === 'strength' ? mechanic : undefined,
       equipment: newType === 'strength' ? newEquipment : undefined,
+      dumbbellLoad: newType === 'strength' && newEquipment === 'dumbbell' ? 'per_hand' : undefined,
     };
 
     try {

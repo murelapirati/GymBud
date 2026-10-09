@@ -23,12 +23,15 @@ export const STORAGE_KEYS = {
   BODY_GENDER: '@gymapp_body_gender',
   RANKING_VERSION: '@gymapp_ranking_version',
   USER_BODYWEIGHT: '@gymapp_user_bodyweight',
+  RECENT_FOODS: '@gymapp_recent_foods',
+  USER_FOODS: '@gymapp_user_foods',
+  LIBRARY_FOLDERS: '@gymapp_library_folders',
 } as const;
 
 // Generic storage functions
 export const storage = {
   // Save data
-  setItem: async (key: string, value: any): Promise<void> => {
+  setItem: async (key: string, value: unknown): Promise<void> => {
     try {
       const jsonValue = JSON.stringify(value);
       await AsyncStorage.setItem(key, jsonValue);

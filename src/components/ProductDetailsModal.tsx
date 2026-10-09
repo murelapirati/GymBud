@@ -178,6 +178,22 @@ export const ProductDetailsModal: React.FC<ProductDetailsModalProps> = ({
                       {product.brand}
                     </Text>
                   )}
+                  {product.source && (
+                    <Text style={[styles.productBrand, { color: theme.textTertiary }]}>
+                      {product.source === 'bundled_catalog'
+                        ? 'GymBud catalog · estimated nutrition'
+                        : product.source === 'user_food'
+                          ? 'Your saved food'
+                          : product.source === 'usda'
+                            ? 'USDA FoodData Central'
+                            : 'OpenFoodFacts'}
+                    </Text>
+                  )}
+                  {product.portionDescription && (
+                    <Text style={[styles.servingSizeText, { color: theme.textSecondary }]}>
+                      Portion: {product.portionDescription}
+                    </Text>
+                  )}
                   <Text style={[styles.servingSizeText, { color: theme.textSecondary }]}>
                     Standard serving: {product.servingSize}{product.servingSizeUnit}
                   </Text>

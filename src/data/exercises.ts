@@ -1,6 +1,6 @@
 import { MappedExercise } from '../types';
 
-export const PREDEFINED_EXERCISES: MappedExercise[] = [
+const PREDEFINED_EXERCISES_RAW: MappedExercise[] = [
   {
     id: 'ex_1',
     name: "Barbell Bench Press",
@@ -9202,3 +9202,39 @@ export const PREDEFINED_EXERCISES: MappedExercise[] = [
     equipment: 'dumbbell'
   },
 ];
+
+const DEFAULT_COMPOUND_MULTIPLIERS: Record<NonNullable<MappedExercise['equipment']>, number> = {
+  barbell: 1.0,
+  dumbbell: 0.85,
+  cable: 0.9,
+  machine: 0.8,
+  bodyweight: 0.6,
+  other: 0.9,
+};
+
+const calibrateCatalogExercise = (exercise: MappedExercise): MappedExercise => {
+  const isDefaultMultiplier = exercise.difficultyMultiplier === 1;
+  const isIsolation = exercise.mechanic === 'isolation';
+  const primaryMuscles = exercise.primaryMuscles;
+  const calibratedMultiplier = isDefaultMultiplier
+    ? isIsolation
+      ? primaryMuscles.includes('calves')
+        ? 0.4
+        : primaryMuscles.includes('abs') || primaryMuscles.includes('obliques')
+          ? 0.35
+          : 0.5
+      : DEFAULT_COMPOUND_MULTIPLIERS[exercise.equipment || 'other']
+    : exercise.difficultyMultiplier;
+
+  return {
+    ...exercise,
+    difficultyMultiplier: calibratedMultiplier,
+    dumbbellLoad:
+      exercise.equipment === 'dumbbell'
+        ? exercise.dumbbellLoad || 'per_hand'
+        : exercise.dumbbellLoad,
+  };
+};
+
+export const PREDEFINED_EXERCISES: MappedExercise[] =
+  PREDEFINED_EXERCISES_RAW.map(calibrateCatalogExercise);

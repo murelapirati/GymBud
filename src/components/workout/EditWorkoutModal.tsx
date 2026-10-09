@@ -166,7 +166,7 @@ export const EditWorkoutModal: React.FC<EditWorkoutModalProps> = ({
                     </View>
                   )}
 
-                  {/* Add Set Section - only for exercises with sets (gym/calisthenics) */}
+                  {/* Add Set Section - only for strength exercises with sets */}
                   {exercise.sets && addingSetToExerciseId === exercise.id ? (
                     <View style={[styles.addSetSection, { borderColor: theme.border }]}>
                       <View style={styles.addSetInputs}>

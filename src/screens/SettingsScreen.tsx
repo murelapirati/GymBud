@@ -482,7 +482,7 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
               <View style={{ flex: 1 }}>
                 <Text style={[styles.settingTitle, { color: theme.text }]}>Body Weight</Text>
                 <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
-                  Used for calisthenics scaling ({measurementSystem === 'metric' ? 'kg' : 'lbs'})
+                  Used for bodyweight scaling ({measurementSystem === 'metric' ? 'kg' : 'lbs'})
                 </Text>
               </View>
             </View>
@@ -721,4 +721,3 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
 });
-

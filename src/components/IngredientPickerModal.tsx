@@ -13,7 +13,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { ScannedProduct } from '../types';
-import { searchFoodByText, fetchProductByBarcode } from '../utils/foodApi';
+import { fetchProductByBarcode } from '../utils/foodApi';
+import { searchFoods } from '../utils/foodSearch';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
 
 interface IngredientPickerModalProps {
@@ -43,7 +44,7 @@ export const IngredientPickerModal: React.FC<IngredientPickerModalProps> = ({
     searchTimeout.current = setTimeout(async () => {
       setIsSearching(true);
       setSearched(true);
-      const found = await searchFoodByText(text.trim());
+      const found = await searchFoods(text.trim());
       setResults(found);
       setIsSearching(false);
     }, 600);
@@ -94,6 +95,11 @@ export const IngredientPickerModal: React.FC<IngredientPickerModalProps> = ({
             {item.brand}
           </Text>
         ) : null}
+        {item.source && (
+          <Text style={[styles.resultBrand, { color: theme.textTertiary }]}>
+            {item.source === 'bundled_catalog' ? 'GymBud catalog · estimated' : item.source === 'user_food' ? 'My food' : 'OpenFoodFacts'}
+          </Text>
+        )}
         <Text style={[styles.resultMacros, { color: theme.textSecondary }]}>
           {Math.round(item.nutriments.energyKcal)} kcal · {item.nutriments.proteins}g P · {item.nutriments.carbohydrates}g C · {item.nutriments.fat}g F  <Text style={{ color: theme.textTertiary }}>per 100{item.servingSizeUnit}</Text>
         </Text>

@@ -1,18 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { storage, STORAGE_KEYS } from '../utils/storage';
-import { MuscleGroup, MuscleStatus, Workout, MappedExercise } from '../types';
-import { processWorkoutForRanks, applyDecay, recalculateAllScoresFromHistory } from '../utils/rankingEngine';
+import { MuscleGroup, MuscleStatus, Workout } from '../types';
+import { getStrengthPointChanges, processWorkoutForRanks, applyDecay, recalculateAllScoresFromHistory, StrengthPointChange } from '../utils/rankingEngine';
+import { RankingGender } from '../utils/rankingRules';
+import { exerciseRepository, rankingRepository, workoutRepository } from '../utils/repositories';
 
 // Bump this version whenever ranking engine logic changes to trigger recalculation
-const CURRENT_RANKING_VERSION = '9';
+const CURRENT_RANKING_VERSION = '13';
 
-type BodyGender = 'male' | 'female';
+type BodyGender = RankingGender;
 
 interface BodyMapContextType {
   muscleStatuses: Record<MuscleGroup, MuscleStatus>;
   gender: BodyGender;
   setGender: (gender: BodyGender) => Promise<void>;
-  updateRanksFromWorkout: (workout: Workout) => Promise<void>;
+  updateRanksFromWorkout: (workout: Workout) => Promise<StrengthPointChange[]>;
   refreshRanks: () => Promise<void>;
   recalculateAllRanks: () => Promise<void>;
   isLoading: boolean;
@@ -37,28 +39,28 @@ export const BodyMapProvider: React.FC<{ children: ReactNode }> = ({ children })
    * Reprocesses ALL workouts from history through the current ranking engine.
    * Called automatically when the ranking engine version changes.
    */
-  const recalculateAllRanks = async () => {
+  const recalculateAllRanks = async (selectedGender: BodyGender = gender) => {
     try {
       console.log('[BodyMap] Recalculating all ranks from workout history...');
-      const history = await storage.getItem<Record<string, any[]>>(STORAGE_KEYS.WORKOUT_HISTORY) || {};
-      const customExercises = await storage.getItem<MappedExercise[]>(STORAGE_KEYS.CUSTOM_EXERCISES) || [];
+      const history = await workoutRepository.getHistory() || {};
+      const customExercises = await exerciseRepository.getCustomExercises() || [];
 
       // Collect all workouts and sort by date
       const allWorkouts: Workout[] = [];
       Object.keys(history).sort().forEach(date => {
         const dayWorkouts = history[date];
         if (Array.isArray(dayWorkouts)) {
-          dayWorkouts.forEach(w => allWorkouts.push(w as Workout));
+          dayWorkouts.forEach(w => allWorkouts.push(w as unknown as Workout));
         }
       });
 
       // Start from a clean slate and reprocess every workout
-      const rawBodyweight = await storage.getItem<number>(STORAGE_KEYS.USER_BODYWEIGHT) || 70;
-      const statuses = recalculateAllScoresFromHistory(allWorkouts, customExercises, rawBodyweight);
+      const rawBodyweight = await rankingRepository.getBodyweight();
+      const statuses = recalculateAllScoresFromHistory(allWorkouts, customExercises, rawBodyweight, selectedGender);
 
       // Save recalculated statuses and update version
-      await storage.setItem(STORAGE_KEYS.MUSCLE_STATUS, statuses);
-      await storage.setItem(STORAGE_KEYS.RANKING_VERSION, CURRENT_RANKING_VERSION);
+      await rankingRepository.setStatuses(statuses);
+      await rankingRepository.setVersion(CURRENT_RANKING_VERSION);
       setMuscleStatuses(statuses);
 
       console.log(`[BodyMap] Recalculated ranks from ${allWorkouts.length} workouts. Version: ${CURRENT_RANKING_VERSION}`);
@@ -70,37 +72,34 @@ export const BodyMapProvider: React.FC<{ children: ReactNode }> = ({ children })
   const loadData = async () => {
     setIsLoading(true);
     try {
+      const storedGender = await storage.getItem<BodyGender>(STORAGE_KEYS.BODY_GENDER) || 'male';
+      setGenderState(storedGender);
       // Check if ranking engine version has changed
-      const storedVersion = await storage.getItem<string>(STORAGE_KEYS.RANKING_VERSION);
+      const storedVersion = await rankingRepository.getVersion();
 
       if (storedVersion !== CURRENT_RANKING_VERSION) {
         // Engine changed — full recalculation from workout history
         console.log(`[BodyMap] Ranking engine updated (${storedVersion} → ${CURRENT_RANKING_VERSION}). Recalculating...`);
-        await recalculateAllRanks();
+        await recalculateAllRanks(storedGender);
       } else {
         // Version matches — load stored statuses normally
-        const storedStatuses = await storage.getItem<Record<MuscleGroup, MuscleStatus>>(STORAGE_KEYS.MUSCLE_STATUS);
+        const storedStatuses = await rankingRepository.getStatuses();
         if (storedStatuses) {
-          const decayed = applyDecay(storedStatuses);
+          const decayed = applyDecay(storedStatuses, undefined, storedGender);
           setMuscleStatuses(decayed);
-          await storage.setItem(STORAGE_KEYS.MUSCLE_STATUS, decayed);
+          await rankingRepository.setStatuses(decayed);
         } else {
           setMuscleStatuses({} as any);
         }
       }
 
-      const storedGender = await storage.getItem<BodyGender>(STORAGE_KEYS.BODY_GENDER);
-      if (storedGender) {
-        setGenderState(storedGender);
-      }
-
       if (__DEV__) {
         // Triggers debug dump to the Python helper server
         try {
-          const history = await storage.getItem<Record<string, any[]>>(STORAGE_KEYS.WORKOUT_HISTORY) || {};
-          const customExercises = await storage.getItem<MappedExercise[]>(STORAGE_KEYS.CUSTOM_EXERCISES) || [];
-          const rawBodyweight = await storage.getItem<number>(STORAGE_KEYS.USER_BODYWEIGHT) || 70;
-          const currentStatuses = await storage.getItem<Record<MuscleGroup, MuscleStatus>>(STORAGE_KEYS.MUSCLE_STATUS) || {};
+          const history = await workoutRepository.getHistory() || {};
+          const customExercises = await exerciseRepository.getCustomExercises() || [];
+          const rawBodyweight = await rankingRepository.getBodyweight();
+          const currentStatuses = await rankingRepository.getStatuses() || {};
           const payload = JSON.stringify({
             statuses: currentStatuses,
             history,
@@ -143,17 +142,21 @@ export const BodyMapProvider: React.FC<{ children: ReactNode }> = ({ children })
   const setGender = async (newGender: BodyGender) => {
     setGenderState(newGender);
     await storage.setItem(STORAGE_KEYS.BODY_GENDER, newGender);
+    await recalculateAllRanks(newGender);
   };
 
   const updateRanksFromWorkout = async (workout: Workout) => {
     try {
-      const customExercises = await storage.getItem<MappedExercise[]>(STORAGE_KEYS.CUSTOM_EXERCISES) || [];
-      const rawBodyweight = await storage.getItem<number>(STORAGE_KEYS.USER_BODYWEIGHT) || 70;
-      const newStatuses = processWorkoutForRanks(workout, muscleStatuses, customExercises, rawBodyweight);
+      const previousStatuses = muscleStatuses;
+      const customExercises = await exerciseRepository.getCustomExercises() || [];
+      const rawBodyweight = await rankingRepository.getBodyweight();
+      const newStatuses = processWorkoutForRanks(workout, muscleStatuses, customExercises, rawBodyweight, gender);
       setMuscleStatuses(newStatuses);
-      await storage.setItem(STORAGE_KEYS.MUSCLE_STATUS, newStatuses);
+      await rankingRepository.setStatuses(newStatuses);
+      return getStrengthPointChanges(previousStatuses, newStatuses);
     } catch (error) {
       console.error('Error updating ranks from workout:', error);
+      return [];
     }
   };
 

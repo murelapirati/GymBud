@@ -16,6 +16,10 @@ export interface ScannedProduct {
   barcode: string;
   name: string;
   brand?: string;
+  source?: FoodSource;
+  confidence?: FoodConfidence;
+  aliases?: string[];
+  portionDescription?: string;
   servingSize: number; // in grams or ml
   servingSizeUnit: string; // 'g', 'ml', etc.
   totalSize?: number; // total product quantity (e.g., 500 for a 500ml bottle)
@@ -28,6 +32,16 @@ export interface ScannedProduct {
   };
   imageUrl?: string;
 }
+
+export type FoodSource =
+  | 'openfoodfacts'
+  | 'bundled_catalog'
+  | 'user_food'
+  | 'recent_food'
+  | 'recipe'
+  | 'usda';
+
+export type FoodConfidence = 'high' | 'medium' | 'estimated';
 
 // Cached product for offline access
 export interface CachedProduct extends ScannedProduct {
@@ -69,6 +83,18 @@ export interface Recipe {
   notes?: string;
   createdAt: number;
   updatedAt: number;
+  folderId?: string;
+}
+
+export type LibraryFolderType = 'templates' | 'recipes';
+
+export interface LibraryFolder {
+  id: string;
+  name: string;
+  type: LibraryFolderType;
+  createdAt: number;
+  parentId?: string;
+  isSystem?: boolean;
 }
 
 // Workout tracking types
@@ -89,42 +115,37 @@ export interface Set {
   completed: boolean;
 }
 
-// Gym workout - sets, reps, weight
-export interface GymExercise {
+// Strength workout sets support both external load and optional bodyweight load.
+export interface StrengthSet {
+  id: string;
+  reps: number;
+  weight?: number;
+  extraWeight?: number;
+  completed: boolean;
+  completedAt?: Date;
+  restTime?: number;
+  isWarmup?: boolean;
+}
+
+export interface StrengthExercise {
   id: string;
   name: string;
-  sets: {
-    id: string;
-    reps: number;
-    weight: number;
-    completed: boolean;
-    completedAt?: Date;
-  }[];
+  sets: StrengthSet[];
   restTimer: number;
   notes?: string;
 }
 
-// Cardio workout - just duration
+/** @deprecated Legacy aliases retained for persisted-data compatibility. */
+export type GymExercise = StrengthExercise;
+/** @deprecated Bodyweight strength is represented by equipment, not workout type. */
+export type CalisthenicsExercise = StrengthExercise;
+
+// Cardio workout - duration and optional distance.
 export interface CardioExercise {
   id: string;
   name: string;
   duration: number; // in seconds
   distance?: number; // optional, in km
-  notes?: string;
-}
-
-// Calisthenics - bodyweight + optional extra weight
-export interface CalisthenicsExercise {
-  id: string;
-  name: string;
-  sets: {
-    id: string;
-    reps: number;
-    extraWeight?: number; // optional extra weight
-    completed: boolean;
-    completedAt?: Date;
-  }[];
-  restTimer: number;
   notes?: string;
 }
 
@@ -172,6 +193,7 @@ export type RankTier =
   | 'iron' 
   | 'bronze' 
   | 'gold' 
+  | 'platinum'
   | 'diamond' 
   | 'emerald' 
   | 'master' 
@@ -183,6 +205,8 @@ export interface MuscleStatus {
   bestScore: number;
   rank: RankTier;
   lastTrained: string; // YYYY-MM-DD
+  scoreHistory?: Array<{ date: string; score: number }>;
+  lastScoreChange?: number;
 }
 
 export interface MappedExercise {
@@ -194,6 +218,7 @@ export interface MappedExercise {
   difficultyMultiplier: number; // 1.0 is standard (e.g. flat bench)
   mechanic?: 'isolation' | 'compound';
   equipment?: 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'other';
+  dumbbellLoad?: 'per_hand' | 'combined';
 }
 
 // Workout Template types
@@ -204,15 +229,17 @@ export interface WorkoutTemplate {
   exercises: TemplateExercise[];
   createdAt: number;
   lastUsed?: number;
+  folderId?: string;
 }
 
 export interface TemplateExercise {
   id: string;
   name: string;
-  restTimer?: number; // for gym/calisthenics
+  restTimer?: number; // for strength exercises
   duration?: number; // for cardio/stretching (default duration)
   type?: 'strength' | 'cardio' | 'stretching'; // exercise type within template
   equipment?: 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'other';
+  dumbbellLoad?: 'per_hand' | 'combined';
   mechanic?: 'isolation' | 'compound';
 }
 

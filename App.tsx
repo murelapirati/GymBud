@@ -7,8 +7,7 @@ import { SectionKey } from './src/utils/theme';
 import { ActiveWorkoutProvider, useActiveWorkout } from './src/context/ActiveWorkoutContext';
 import { GlobalDateProvider } from './src/context/GlobalDateContext';
 import { BodyMapProvider } from './src/context/BodyMapContext';
-import { storage, STORAGE_KEYS } from './src/utils/storage';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { migrateWorkoutTypes, seedDefaultTemplates } from './src/utils/bootstrap';
 import ActiveWorkoutStatusBar from './src/components/ActiveWorkoutStatusBar';
 import RestTimerStatusBar from './src/components/RestTimerStatusBar';
 import GlobalDateWarning from './src/components/GlobalDateWarning';
@@ -22,67 +21,32 @@ import GoalsScreen from './src/screens/GoalsScreen';
 import WorkoutGoalsScreen from './src/screens/WorkoutGoalsScreen';
 import BodyMapScreen from './src/screens/BodyMapScreen';
 
-const MIGRATION_FLAG_KEY = '@gymapp_workouttype_migration_v1';
+type RootScreen =
+  | 'calories'
+  | 'library'
+  | 'workouts'
+  | 'ranks'
+  | 'settings'
+  | 'goals'
+  | 'workoutGoals'
+  | 'activeWorkout'
+  | 'restTimer';
 
-const migrateWorkoutTypes = async () => {
-  try {
-    const alreadyMigrated = await AsyncStorage.getItem(MIGRATION_FLAG_KEY);
-    if (alreadyMigrated) return;
-
-    const migrateType = (t: string) =>
-      t === 'gym' || t === 'calisthenics' ? 'strength' : t;
-
-    // Migrate workout history (object keyed by date, value is array of sessions)
-    const history = await storage.getItem<Record<string, any[]>>(STORAGE_KEYS.WORKOUT_HISTORY) || {};
-    const migratedHistory: Record<string, any[]> = {};
-    for (const [date, sessions] of Object.entries(history)) {
-      migratedHistory[date] = (sessions || []).map((w: any) => ({
-        ...w,
-        workoutType: migrateType(w.workoutType || ''),
-        exercises: (w.exercises || []).map((ex: any) => ({
-          ...ex,
-          type: migrateType(ex.type || ''),
-        })),
-      }));
-    }
-    await storage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, migratedHistory);
-
-    // Migrate workout templates
-    const templates = await storage.getItem<any[]>(STORAGE_KEYS.WORKOUT_TEMPLATES) || [];
-    const migratedTemplates = templates.map((t: any) => ({
-      ...t,
-      workoutType: migrateType(t.workoutType || ''),
-      exercises: (t.exercises || []).map((ex: any) => ({
-        ...ex,
-        type: migrateType(ex.type || ''),
-      })),
-    }));
-    await storage.setItem(STORAGE_KEYS.WORKOUT_TEMPLATES, migratedTemplates);
-
-    // Migrate custom exercises
-    const customExs = await storage.getItem<any[]>(STORAGE_KEYS.CUSTOM_EXERCISES) || [];
-    const migratedCustom = customExs.map((ex: any) => ({
-      ...ex,
-      type: migrateType(ex.type || ''),
-    }));
-    await storage.setItem(STORAGE_KEYS.CUSTOM_EXERCISES, migratedCustom);
-
-    await AsyncStorage.setItem(MIGRATION_FLAG_KEY, 'done');
-    console.log('[Migration] workoutType gym/calisthenics → strength complete');
-  } catch (err) {
-    console.error('[Migration] workoutType migration failed:', err);
-  }
-};
-
-
+const tabScreens: Array<{
+  key: Extract<RootScreen, 'calories' | 'library' | 'workouts' | 'ranks'>;
+  label: string;
+  section: SectionKey;
+  icon: 'flame' | 'library' | 'barbell' | 'medal';
+}> = [
+  { key: 'calories', label: 'Nutrition', section: 'Calories', icon: 'flame' },
+  { key: 'library', label: 'Library', section: 'Library', icon: 'library' },
+  { key: 'workouts', label: 'Workouts', section: 'Workouts', icon: 'barbell' },
+  { key: 'ranks', label: 'Ranks', section: 'Ranks', icon: 'medal' },
+];
 
 function MainApp() {
-  const [activeScreen, setActiveScreen] = useState('Calories');
-  const [showSettings, setShowSettings] = useState(false);
-  const [showGoals, setShowGoals] = useState(false);
-  const [showWorkoutGoals, setShowWorkoutGoals] = useState(false);
-  const [showActiveWorkout, setShowActiveWorkout] = useState(false);
-  const [showRestTimer, setShowRestTimer] = useState(false);
+  const [screen, setScreen] = useState<RootScreen>('calories');
+  const [activeTab, setActiveTab] = useState<Extract<RootScreen, 'calories' | 'library' | 'workouts' | 'ranks'>>('calories');
   const [collapsedExercises, setCollapsedExercises] = useState<Set<string>>(new Set());
   const { theme, setActiveSection } = useTheme();
   const { 
@@ -95,15 +59,10 @@ function MainApp() {
     clearStretchTimerCompleted 
   } = useActiveWorkout();
 
-  // Run one-time data migration on mount
-  useEffect(() => {
-    migrateWorkoutTypes();
-  }, []);
-
   // Auto-navigate to rest timer screen when timer starts
   useEffect(() => {
     if (restTimerInitialSeconds > 0) {
-      setShowRestTimer(true);
+      setScreen('restTimer');
     }
   }, [restTimerInitialSeconds]);
 
@@ -117,18 +76,18 @@ function MainApp() {
 
   const handleRestTimerComplete = () => {
     clearRestTimerCompleted();
-    setShowRestTimer(false);
+    setScreen('activeWorkout');
   };
 
   const renderScreen = () => {
-    if (showRestTimer) {
-      return <RestTimerScreen onBack={() => setShowRestTimer(false)} />;
+    if (screen === 'restTimer') {
+      return <RestTimerScreen onBack={() => setScreen('activeWorkout')} />;
     }
 
-    if (showActiveWorkout) {
+    if (screen === 'activeWorkout') {
       return <ActiveWorkoutScreen 
         onBack={() => {
-          setShowActiveWorkout(false);
+          setScreen('workouts');
           // Clear collapsed state when leaving workout screen
           if (!isWorkoutActive) {
             setCollapsedExercises(new Set());
@@ -139,60 +98,58 @@ function MainApp() {
       />;
     }
 
-    if (showWorkoutGoals) {
-      return <WorkoutGoalsScreen onBack={() => setShowWorkoutGoals(false)} />;
+    if (screen === 'workoutGoals') {
+      return <WorkoutGoalsScreen onBack={() => setScreen('settings')} />;
     }
 
-    if (showGoals) {
+    if (screen === 'goals') {
       return <GoalsScreen 
-        onBack={() => setShowGoals(false)} 
+        onBack={() => setScreen('settings')}
         onApplyPreset={() => {
-          setShowGoals(false);
+          setScreen('settings');
         }}
       />;
     }
     
-    if (showSettings) {
+    if (screen === 'settings') {
       return <SettingsScreen 
-        onBack={() => setShowSettings(false)} 
+        onBack={() => setScreen(activeTab)}
         onOpenGoals={() => {
-          setShowSettings(false);
-          setShowGoals(true);
+          setScreen('goals');
         }}
         onOpenWorkoutGoals={() => {
-          setShowSettings(false);
-          setShowWorkoutGoals(true);
+          setScreen('workoutGoals');
         }}
       />;
     }
 
-    switch (activeScreen) {
-      case 'Calories':
-        return <CaloriesScreen onOpenSettings={() => setShowSettings(true)} />;
-      case 'Library':
-        return <LibraryScreen onOpenSettings={() => setShowSettings(true)} />;
-      case 'Workouts':
+    switch (screen) {
+      case 'calories':
+        return <CaloriesScreen onOpenSettings={() => setScreen('settings')} />;
+      case 'library':
+        return <LibraryScreen onOpenSettings={() => setScreen('settings')} />;
+      case 'workouts':
         return <WorkoutsScreen 
-          onOpenSettings={() => setShowSettings(true)}
-          onStartWorkout={() => setShowActiveWorkout(true)}
+          onOpenSettings={() => setScreen('settings')}
+          onStartWorkout={() => setScreen('activeWorkout')}
         />;
-      case 'Ranks':
+      case 'ranks':
         return <BodyMapScreen 
-          onOpenSettings={() => setShowSettings(true)}
+          onOpenSettings={() => setScreen('settings')}
         />;
 
       default:
-        return <CaloriesScreen onOpenSettings={() => setShowSettings(true)} />;
+        return <CaloriesScreen onOpenSettings={() => setScreen('settings')} />;
     }
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-      {isWorkoutActive && !showActiveWorkout && (
-        <ActiveWorkoutStatusBar onPress={() => setShowActiveWorkout(true)} />
+      {isWorkoutActive && screen !== 'activeWorkout' && (
+        <ActiveWorkoutStatusBar onPress={() => setScreen('activeWorkout')} />
       )}
-      {activeRestTimer && activeRestTimer > 0 && !showRestTimer && showActiveWorkout && (
-        <RestTimerStatusBar onPress={() => setShowRestTimer(true)} />
+      {activeRestTimer && activeRestTimer > 0 && screen !== 'restTimer' && screen === 'activeWorkout' && (
+        <RestTimerStatusBar onPress={() => setScreen('restTimer')} />
       )}
       
       {/* Rest Timer Completion Modal */}
@@ -220,22 +177,18 @@ function MainApp() {
         <GlobalDateWarning />
         {renderScreen()}
       </View>
-      {!showSettings && !showGoals && !showWorkoutGoals && !showActiveWorkout && !showRestTimer && (
+      {['calories', 'library', 'workouts', 'ranks'].includes(screen) && (
         <View style={[styles.tabBar, { backgroundColor: theme.tabBar }]}>
-          {[
-            { key: 'Calories', label: 'Nutrition', icon: 'flame' as const },
-            { key: 'Library', label: 'Library', icon: 'library' as const },
-            { key: 'Workouts', label: 'Workouts', icon: 'barbell' as const },
-            { key: 'Ranks', label: 'Ranks', icon: 'medal' as const },
-          ].map(tab => {
-            const isActive = activeScreen === tab.key;
+          {tabScreens.map(tab => {
+            const isActive = screen === tab.key;
             return (
               <TouchableOpacity
                 key={tab.key}
                 style={styles.tab}
                 onPress={() => {
-                  setActiveScreen(tab.key);
-                  setActiveSection(tab.key as SectionKey);
+                  setActiveTab(tab.key);
+                  setScreen(tab.key);
+                  setActiveSection(tab.section);
                 }}
                 activeOpacity={0.7}
               >
@@ -266,6 +219,38 @@ function MainApp() {
 }
 
 export default function App() {
+  const [isBootstrapped, setIsBootstrapped] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+
+  useEffect(() => {
+    migrateWorkoutTypes()
+      .then(seedDefaultTemplates)
+      .catch(error => {
+        console.error('App bootstrap failed:', error);
+        setBootstrapError('Unable to initialize saved app data.');
+      })
+      .finally(() => setIsBootstrapped(true));
+  }, []);
+
+  if (!isBootstrapped) {
+    return (
+      <SafeAreaProvider>
+        <View style={styles.container} />
+      </SafeAreaProvider>
+    );
+  }
+
+  if (bootstrapError) {
+    return (
+      <SafeAreaProvider>
+        <View style={[styles.container, styles.bootstrapError]}>
+          <Text style={styles.bootstrapErrorTitle}>GymBud could not start</Text>
+          <Text style={styles.bootstrapErrorText}>{bootstrapError}</Text>
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
@@ -377,5 +362,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     letterSpacing: 0.3,
+  },
+  bootstrapError: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#0F0F14',
+  },
+  bootstrapErrorTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  bootstrapErrorText: {
+    color: '#D1D5DB',
+    fontSize: 16,
+    textAlign: 'center',
   },
 });

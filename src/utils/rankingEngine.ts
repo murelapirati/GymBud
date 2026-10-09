@@ -1,61 +1,57 @@
 import { Workout, GymExercise, CalisthenicsExercise, MappedExercise, MuscleGroup, RankTier, MuscleStatus } from '../types';
 import { PREDEFINED_EXERCISES } from '../data/exercises';
 import { getTodayDate } from './date';
+import {
+  calculate1RM,
+  getRankForScore,
+  getMuscleThresholds,
+  MUSCLE_THRESHOLDS,
+  RankingGender,
+  RANK_ORDER,
+} from './rankingRules';
 
-// Baseline thresholds for a "Standard" muscle group (e.g. Chest)
-// Exponential scaling: fast early ranks for beginners, steep late-game climb
-// Ranks: Dirt, Wood, Iron, Bronze, Gold, Diamond, Emerald, Master, Olympian
-const BASE_THRESHOLDS: number[] = [0, 10, 25, 40, 55, 80, 115, 165, 225];
+export { calculate1RM, getRankForScore, getMuscleThresholds, MUSCLE_THRESHOLDS };
 
-const RANK_ORDER: RankTier[] = [
-  'dirt', 'wood', 'iron', 'bronze',
-  'gold', 'diamond', 'emerald', 'master', 'olympian'
-];
+export interface StrengthPointChange {
+  muscle: MuscleGroup;
+  before: number;
+  after: number;
+  delta: number;
+  previousRank: RankTier;
+  currentRank: RankTier;
+}
 
-// Explicit thresholds for each muscle group based on empirical training standards (effective 1RM load)
-// Tiers in order: Dirt, Wood, Iron, Bronze, Gold, Diamond, Emerald, Master, Olympian
-export const MUSCLE_THRESHOLDS: Record<MuscleGroup, number[]> = {
-  chest: [0, 10, 25, 40, 55, 80, 115, 165, 225],
-  lats: [0, 8, 20, 35, 50, 75, 105, 145, 195],
-  upper_back: [0, 8, 20, 35, 50, 75, 105, 145, 195],
-  lower_back: [0, 15, 35, 60, 85, 125, 175, 240, 320],
-  front_delts: [0, 8, 18, 30, 45, 65, 90, 125, 170],
-  side_delts: [0, 2, 5, 10, 15, 25, 38, 55, 75],
-  rear_delts: [0, 2, 5, 10, 15, 25, 38, 55, 75],
-  biceps: [0, 3, 7, 12, 18, 28, 40, 55, 75],
-  triceps: [0, 4, 10, 18, 28, 42, 60, 82, 110],
-  forearms: [0, 3, 7, 12, 18, 28, 40, 55, 75],
-  abs: [0, 2, 5, 9, 14, 20, 28, 38, 50],
-  obliques: [0, 2, 5, 9, 14, 20, 28, 38, 50],
-  quads: [0, 12, 30, 50, 75, 110, 155, 210, 280],
-  hamstrings: [0, 10, 25, 40, 60, 90, 125, 170, 225],
-  glutes: [0, 12, 30, 50, 75, 110, 155, 210, 280],
-  calves: [0, 8, 20, 35, 55, 80, 115, 160, 220],
+export const getStrengthPointChanges = (
+  before: Record<MuscleGroup, MuscleStatus>,
+  after: Record<MuscleGroup, MuscleStatus>,
+): StrengthPointChange[] => {
+  const muscles = new Set<MuscleGroup>([
+    ...Object.keys(before) as MuscleGroup[],
+    ...Object.keys(after) as MuscleGroup[],
+  ]);
+
+  return [...muscles]
+    .map(muscle => {
+      const previous = before[muscle];
+      const current = after[muscle];
+      const beforeScore = previous?.currentScore || 0;
+      const afterScore = current?.currentScore || 0;
+      return {
+        muscle,
+        before: beforeScore,
+        after: afterScore,
+        delta: afterScore - beforeScore,
+        previousRank: previous?.rank || 'dirt',
+        currentRank: current?.rank || 'dirt',
+      };
+    })
+    .filter(change => change.delta !== 0 || change.previousRank !== change.currentRank)
+    .sort((a, b) => b.delta - a.delta);
 };
 
-/**
- * Calculates Estimated 1RM using pure Epley formula.
- * Intensity is handled separately as a score multiplier in processWorkoutForRanks.
- */
-export const calculate1RM = (weight: number, reps: number): number => {
-  if (reps === 0) return 0;
-  if (reps === 1) return weight;
-  return weight * (1 + reps / 30);
-};
-
-/**
- * Gets the RankTier for a specific muscle score
- */
-export const getRankForScore = (muscle: MuscleGroup, score: number): RankTier => {
-  const thresholds = MUSCLE_THRESHOLDS[muscle] || MUSCLE_THRESHOLDS.chest;
-
-  for (let i = RANK_ORDER.length - 1; i >= 0; i--) {
-    if (score >= thresholds[i]) {
-      return RANK_ORDER[i];
-    }
-  }
-  return 'dirt';
-};
+const ROLLING_WINDOW_SIZE = 5;
+const VOLUME_BONUS_CAP = 0.30;
+const VOLUME_DECAY = 0.4;
 
 /**
  * Gets the biomechanical load percentage of bodyweight moved during a calisthenics movement.
@@ -154,7 +150,8 @@ export const processWorkoutForRanks = (
   workout: Workout,
   currentStatuses: Record<MuscleGroup, MuscleStatus>,
   customExercises: MappedExercise[] = [],
-  bodyweight: number = 70
+  bodyweight: number = 70,
+  gender: RankingGender = 'male',
 ): Record<MuscleGroup, MuscleStatus> => {
   const updatedStatuses = { ...currentStatuses };
   const allAvailableExercises = [...PREDEFINED_EXERCISES, ...customExercises];
@@ -181,17 +178,17 @@ export const processWorkoutForRanks = (
 
     const multiplier = getCalibratedMultiplier(mapping);
     const nameLower = mapping.name.toLowerCase();
-    const isDumbbell = mapping.equipment
-      ? mapping.equipment === 'dumbbell'
-      : (nameLower.includes('dumbbell') || nameLower.includes('dumbell')
-        || /\bdb\b/.test(nameLower) || nameLower.includes('d.b.')
-        || nameLower.includes('hammer curl'));
+    const isDumbbell = mapping.equipment === 'dumbbell';
 
     const processSet = (weight: number, reps: number, completedAt?: Date) => {
       // Apply Dumbbell Rule: Dumbbell Weight * 2 * 1.1 for stability
       let effectiveWeight = weight;
-      if (isDumbbell && mapping.type === 'strength') {
-        effectiveWeight = weight * 2 * 1.1;
+      if (
+        isDumbbell &&
+        mapping.dumbbellLoad === 'per_hand' &&
+        (mapping.type === 'strength' || mapping.type === ('gym' as MappedExercise['type']))
+      ) {
+        effectiveWeight = weight * 2;
       }
 
       const oneRM = calculate1RM(effectiveWeight, reps);
@@ -222,14 +219,17 @@ export const processWorkoutForRanks = (
       }
     };
 
-    if (mapping.type === 'strength' && mapping.equipment !== 'bodyweight') {
+    const isLegacyBodyweight = mapping.type === ('calisthenics' as MappedExercise['type']);
+    const isBodyweight = mapping.equipment === 'bodyweight' || isLegacyBodyweight;
+
+    if (!isBodyweight && (mapping.type === 'strength' || mapping.type === ('gym' as MappedExercise['type']))) {
       const gymEx = ex as unknown as GymExercise;
       gymEx.sets.forEach(set => {
         if (set.completed && set.weight && !(set as any).isWarmup) {
           processSet(set.weight, set.reps, set.completedAt);
         }
       });
-    } else if (mapping.equipment === 'bodyweight') {
+    } else if (isBodyweight) {
       const caliEx = ex as unknown as CalisthenicsExercise;
       const BASE_BODYWEIGHT = bodyweight;
       const bodyweightFactor = getCalisthenicsBodyweightFactor(mapping.name);
@@ -302,6 +302,7 @@ export const processWorkoutForRanks = (
 
       // Add volume bonuses
       let extraSetIndex = 0;
+      let volumeBonusUsed = 0;
       sets.forEach((s, index) => {
         if (s === maxSet) return; // Already counted as the base score
 
@@ -324,14 +325,16 @@ export const processWorkoutForRanks = (
 
         let decayBonus;
         if (isSuperset) {
-          // Same-exercise superset/dropset gets the first decay step (0.15) and does not decay
           decayBonus = 0.15;
         } else {
-          decayBonus = 0.15 * Math.pow(0.4, extraSetIndex);
+          decayBonus = 0.15 * Math.pow(VOLUME_DECAY, extraSetIndex);
           extraSetIndex++;
         }
 
-        totalMuscleScore += s.score * decayBonus;
+        const availableVolumeBonus = Math.max(0, VOLUME_BONUS_CAP - volumeBonusUsed);
+        const appliedVolumeBonus = Math.min(decayBonus, availableVolumeBonus);
+        totalMuscleScore += s.score * appliedVolumeBonus;
+        volumeBonusUsed += appliedVolumeBonus;
 
         // Cross-exercise superset bonus still applies on top
         if (s.isCrossExerciseSuperset) {
@@ -342,7 +345,7 @@ export const processWorkoutForRanks = (
       // Apply intensity multiplier (rewards training hard)
       totalMuscleScore *= intensityMultiplier;
 
-      updateMuscleScore(updatedStatuses, muscle, totalMuscleScore, workout.date);
+      updateMuscleScore(updatedStatuses, muscle, totalMuscleScore, workout.date, gender);
     }
   });
 
@@ -353,7 +356,8 @@ const updateMuscleScore = (
   statuses: Record<MuscleGroup, MuscleStatus>,
   muscle: MuscleGroup,
   newScore: number,
-  date: string
+  date: string,
+  gender: RankingGender = 'male',
 ) => {
   if (!statuses[muscle]) {
     statuses[muscle] = {
@@ -370,18 +374,20 @@ const updateMuscleScore = (
   // Update last trained date
   status.lastTrained = date;
 
-  // If this workout set a new high for current score
-  if (newScore > status.currentScore) {
-    status.currentScore = newScore;
+  const history = [...(status.scoreHistory || []), { date, score: newScore }]
+    .slice(-ROLLING_WINDOW_SIZE);
+  const weightedTotal = history.reduce((total, entry, index) => {
+    const weight = index + 1;
+    return total + entry.score * weight;
+  }, 0);
+  const totalWeight = history.reduce((total, _entry, index) => total + index + 1, 0);
+  const rollingScore = weightedTotal / totalWeight;
 
-    // Check if it's an all-time best
-    if (newScore > status.bestScore) {
-      status.bestScore = newScore;
-    }
-
-    // Update rank
-    status.rank = getRankForScore(muscle, status.currentScore);
-  }
+  status.scoreHistory = history;
+  status.lastScoreChange = rollingScore - status.currentScore;
+  status.currentScore = rollingScore;
+  status.bestScore = Math.max(status.bestScore, newScore);
+  status.rank = getRankForScore(muscle, status.currentScore, gender);
 };
 
 /**
@@ -390,9 +396,15 @@ const updateMuscleScore = (
  */
 export const applyDecay = (
   statuses: Record<MuscleGroup, MuscleStatus>,
-  referenceDate?: string
+  referenceDate?: string,
+  gender: RankingGender = 'male',
 ): Record<MuscleGroup, MuscleStatus> => {
-  const updatedStatuses = { ...statuses };
+  const updatedStatuses = Object.fromEntries(
+    Object.entries(statuses).map(([muscle, status]) => [
+      muscle,
+      { ...status, scoreHistory: status.scoreHistory ? [...status.scoreHistory] : undefined },
+    ]),
+  ) as Record<MuscleGroup, MuscleStatus>;
   const today = referenceDate ? new Date(referenceDate) : new Date(getTodayDate());
   const GRACE_PERIOD_DAYS = 21;
   const DECAY_RATE_WEEKLY = 0.02;
@@ -412,7 +424,7 @@ export const applyDecay = (
       const decayFactor = Math.pow(1 - DECAY_RATE_WEEKLY, decayWeeks);
 
       status.currentScore = status.currentScore * decayFactor;
-      status.rank = getRankForScore(muscle, status.currentScore);
+      status.rank = getRankForScore(muscle, status.currentScore, gender);
     }
   });
 
@@ -428,10 +440,11 @@ export interface MuscleProgress {
 
 export const getMuscleProgress = (
   muscle: MuscleGroup,
-  score: number
+  score: number,
+  gender: RankingGender = 'male',
 ): MuscleProgress => {
-  const thresholds = MUSCLE_THRESHOLDS[muscle] || MUSCLE_THRESHOLDS.chest;
-  const currentRank = getRankForScore(muscle, score);
+  const thresholds = getMuscleThresholds(muscle, gender);
+  const currentRank = getRankForScore(muscle, score, gender);
   const currentIndex = RANK_ORDER.indexOf(currentRank);
 
   if (currentIndex === RANK_ORDER.length - 1) {
@@ -448,8 +461,11 @@ export const getMuscleProgress = (
   const nextThreshold = thresholds[currentIndex + 1];
 
   const range = nextThreshold - currentThreshold;
-  const progressPercent = range > 0
-    ? Math.min(100, Math.max(0, ((score - currentThreshold) / range) * 100))
+  const rawProgressPercent = range > 0
+    ? Math.max(0, ((score - currentThreshold) / range) * 100)
+    : 100;
+  const progressPercent = score < nextThreshold
+    ? Math.min(99.9, rawProgressPercent)
     : 100;
   const pointsRemaining = Math.max(0, nextThreshold - score);
 
@@ -467,14 +483,15 @@ export const getMuscleProgress = (
 export const recalculateAllScoresFromHistory = (
   workouts: Workout[],
   customExercises: MappedExercise[],
-  bodyweight: number
+  bodyweight: number,
+  gender: RankingGender = 'male',
 ): Record<MuscleGroup, MuscleStatus> => {
   let statuses = {} as Record<MuscleGroup, MuscleStatus>;
   const sortedWorkouts = [...workouts].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
   for (const workout of sortedWorkouts) {
-    statuses = applyDecay(statuses, workout.date);
-    statuses = processWorkoutForRanks(workout, statuses, customExercises, bodyweight);
+    statuses = applyDecay(statuses, workout.date, gender);
+    statuses = processWorkoutForRanks(workout, statuses, customExercises, bodyweight, gender);
   }
-  return applyDecay(statuses);
+  return applyDecay(statuses, undefined, gender);
 };

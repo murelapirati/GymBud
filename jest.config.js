@@ -1,5 +1,6 @@
 module.exports = {
   preset: 'jest-expo',
+  setupFiles: ['<rootDir>/jest.setup.js'],
   moduleNameMapper: {
     '^expo-modules-core$': '<rootDir>/node_modules/expo-modules-core',
   },

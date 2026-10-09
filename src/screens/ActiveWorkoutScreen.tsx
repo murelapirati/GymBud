@@ -196,7 +196,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
       setActiveExerciseId(exerciseId);
       setEditingSetId(setId);
       setReps(String(set.reps));
-      // Handle both gym (weight) and calisthenics (extraWeight)
+      // Handle weighted and bodyweight strength sets.
       const weightValue = 'weight' in set ? set.weight : 'extraWeight' in set ? set.extraWeight : undefined;
       // Convert from storage (lbs) to display units
       const displayWeight = weightValue ? convertWeightForDisplay(weightValue, measurementSystem) : undefined;
@@ -694,7 +694,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
               );
             }
 
-            // Render gym/calisthenics exercise (with sets)
+            // Render strength exercise (with sets)
             return (
               <View key={exercise.id || `exercise-${exerciseIndex}`} style={[styles.card, { backgroundColor: theme.card }]}>
                 <View style={styles.exerciseHeader}>
@@ -1102,7 +1102,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack, colla
         workoutType={workoutType as any}
         onSelect={(exercise) => {
           if (exercise.type === 'strength') {
-            addExercise(exercise.name, 0, exercise.type);
+            addExercise(exercise.name, 0);
             setActiveExerciseId(null);
           } else if (exercise.type === 'cardio') {
             addCardioActivity(exercise.name);

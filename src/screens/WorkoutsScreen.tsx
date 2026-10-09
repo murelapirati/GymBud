@@ -123,7 +123,7 @@ export default function WorkoutsScreen({ onOpenSettings, onStartWorkout }: Worko
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const [workoutStartTime, setWorkoutStartTime] = useState<number | null>(null);
   const [activeRestTimer, setActiveRestTimer] = useState<number | null>(null);
-  const [restTimerInterval, setRestTimerInterval] = useState<NodeJS.Timeout | null>(null);
+  const [restTimerInterval, setRestTimerInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const [todaySteps, setTodaySteps] = useState(0);
   const [stepGoal, setStepGoal] = useState(10000);
   const [exerciseMinutesGoal, setExerciseMinutesGoal] = useState(30);
