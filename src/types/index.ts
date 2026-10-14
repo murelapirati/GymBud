@@ -205,6 +205,7 @@ export interface MuscleStatus {
   bestScore: number;
   rank: RankTier;
   lastTrained: string; // YYYY-MM-DD
+  lastWorkedAt?: number; // timestamp in ms for decay calculations
   scoreHistory?: Array<{ date: string; score: number }>;
   lastScoreChange?: number;
 }
