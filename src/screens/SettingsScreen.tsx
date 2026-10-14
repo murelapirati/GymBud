@@ -27,6 +27,9 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
   const [hasChanges, setHasChanges] = useState(false);
   const [measurementSystem, setMeasurementSystem] = useState<MeasurementSystem>('imperial');
   const [promptSaveTemplate, setPromptSaveTemplate] = useState(false);
+  const [restTimerSound, setRestTimerSound] = useState(true);
+  const [restTimerVibration, setRestTimerVibration] = useState(true);
+  const [restTimerNotification, setRestTimerNotification] = useState(true);
   const [showCustomExercises, setShowCustomExercises] = useState(false);
   const { gender, setGender, refreshRanks, recalculateAllRanks } = useBodyMap();
   const [bodyweightInput, setBodyweightInput] = useState('70');
@@ -38,7 +41,37 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
     loadMeasurementSystem();
     loadPromptSaveTemplate();
     loadBodyweight();
+    loadRestTimerPreferences();
   }, []);
+
+  const loadRestTimerPreferences = async () => {
+    try {
+      const [sound, vibration, notification] = await Promise.all([
+        storage.getItem<boolean>(STORAGE_KEYS.REST_TIMER_SOUND),
+        storage.getItem<boolean>(STORAGE_KEYS.REST_TIMER_VIBRATION),
+        storage.getItem<boolean>(STORAGE_KEYS.REST_TIMER_NOTIFICATION),
+      ]);
+      if (sound !== null) setRestTimerSound(sound);
+      if (vibration !== null) setRestTimerVibration(vibration);
+      if (notification !== null) setRestTimerNotification(notification);
+    } catch (error) {
+      console.error('Error loading rest timer preferences:', error);
+    }
+  };
+
+  const toggleRestTimerPreference = async (
+    key: typeof STORAGE_KEYS.REST_TIMER_SOUND | typeof STORAGE_KEYS.REST_TIMER_VIBRATION | typeof STORAGE_KEYS.REST_TIMER_NOTIFICATION,
+    value: boolean,
+    setValue: (nextValue: boolean) => void,
+  ) => {
+    try {
+      await storage.setItem(key, !value);
+      setValue(!value);
+    } catch (error) {
+      console.error('Error saving rest timer preference:', error);
+      Alert.alert('Error', 'Failed to save setting');
+    }
+  };
 
   const loadStepMultiplier = async () => {
     try {
@@ -453,6 +486,54 @@ export default function SettingsScreen({ onBack, onOpenGoals, onOpenWorkoutGoals
         </View>
 
 
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Rest Timer Alerts</Text>
+        <View style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.settingRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.settingTitle, { color: theme.text }]}>Sound</Text>
+              <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>Play a beep when rest ends</Text>
+            </View>
+            <Switch
+              value={restTimerSound}
+              onValueChange={() => toggleRestTimerPreference(STORAGE_KEYS.REST_TIMER_SOUND, restTimerSound, setRestTimerSound)}
+              trackColor={{ false: '#E0E0E0', true: theme.primary }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor="#E0E0E0"
+            />
+          </View>
+        </View>
+        <View style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.settingRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.settingTitle, { color: theme.text }]}>Vibration</Text>
+              <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>Use haptic feedback when rest ends</Text>
+            </View>
+            <Switch
+              value={restTimerVibration}
+              onValueChange={() => toggleRestTimerPreference(STORAGE_KEYS.REST_TIMER_VIBRATION, restTimerVibration, setRestTimerVibration)}
+              trackColor={{ false: '#E0E0E0', true: theme.primary }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor="#E0E0E0"
+            />
+          </View>
+        </View>
+        <View style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.settingRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.settingTitle, { color: theme.text }]}>Notification</Text>
+              <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                Alert when the timer ends in the background. iOS notification sounds follow the silent switch.
+              </Text>
+            </View>
+            <Switch
+              value={restTimerNotification}
+              onValueChange={() => toggleRestTimerPreference(STORAGE_KEYS.REST_TIMER_NOTIFICATION, restTimerNotification, setRestTimerNotification)}
+              trackColor={{ false: '#E0E0E0', true: theme.primary }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor="#E0E0E0"
+            />
+          </View>
+        </View>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>Data & Tracking</Text>
         <View style={[styles.settingCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={styles.settingRow}>
