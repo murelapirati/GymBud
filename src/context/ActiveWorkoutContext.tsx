@@ -4,6 +4,7 @@ import { storage, STORAGE_KEYS } from '../utils/storage';
 import { StrengthSet, WorkoutTemplate, TemplateExercise, Workout } from '../types';
 import { useBodyMap } from './BodyMapContext';
 import { persistCompletedWorkout } from '../utils/workoutPersistence';
+import { createUniqueId } from '../utils/uniqueId';
 
 export type WorkoutType = 'strength' | 'cardio' | 'stretching';
 
@@ -333,7 +334,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
 
       // Create workout session
       const workoutSession = {
-        id: Date.now().toString(),
+        id: createUniqueId(),
         date: dateStr,
         workoutType: workoutType || 'strength',
         exercises: exercises.map(ex => ({
@@ -393,7 +394,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
   const addExercise = (name: string, restTimer: number) => {
     const resolvedType = workoutType === 'strength' ? 'strength' : (workoutType || 'strength');
     const newExercise: WorkoutExercise = {
-      id: Date.now().toString(),
+      id: createUniqueId(),
       name,
       type: resolvedType as 'strength' | 'cardio' | 'stretching',
       sets: [],
@@ -403,7 +404,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
   };
 
   const logSet = (exerciseId: string, reps: number, weight?: number, restTime?: number, isWarmup?: boolean) => {
-    const setId = Date.now().toString();
+    const setId = createUniqueId();
     setExercises(prev => prev.map(ex => {
       if (ex.id === exerciseId) {
         const newSet: StrengthSet = ex.type === 'strength'
@@ -479,7 +480,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
   // Cardio methods
   const addCardioActivity = (name: string) => {
     const newActivity: WorkoutExercise = {
-      id: Date.now().toString(),
+      id: createUniqueId(),
       name,
       type: 'cardio',
       duration: 0,
@@ -548,7 +549,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
   // Stretching methods
   const addStretchingActivity = (name: string, duration: number) => {
     const newActivity: WorkoutExercise = {
-      id: Date.now().toString(),
+      id: createUniqueId(),
       name,
       type: 'stretching',
       duration, // target duration in seconds

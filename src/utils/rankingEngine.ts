@@ -53,6 +53,71 @@ const ROLLING_WINDOW_SIZE = 5;
 const VOLUME_BONUS_CAP = 0.30;
 const VOLUME_DECAY = 0.4;
 
+export const ONERM_FORMULAS = {
+  epley: (w: number, r: number) => w * (1 + r / 30),
+  brzycki: (w: number, r: number) => w * 36 / (37 - r),
+  lombardi: (w: number, r: number) => w * Math.pow(r, 0.1),
+  oconner: (w: number, r: number) => w * (1 + r / 40),
+  mayhew: (w: number, r: number) => (w * 100) / (52.2 + 41.9 * Math.exp(-0.055 * r)),
+  wathan: (w: number, r: number) => (w * 100) / (48.8 + 53.8 * Math.exp(-0.075 * r)),
+  lander: (w: number, r: number) => (w * 100) / (101.3 - 2.67123 * r),
+} as const;
+
+export const ONERM_WEIGHTS = {
+  epley: { base: 0.95, dropStart: 6, dropRate: 0.12, floor: 0.4 },
+  brzycki: { base: 1.1, dropStart: 8, dropRate: 0.18, floor: 0.3 },
+  lombardi: { base: 0.85, dropStart: 5, dropRate: 0.1, floor: 0.4 },
+  oconner: { base: 0.9, dropStart: 6, dropRate: 0.12, floor: 0.4 },
+  mayhew: { base: 0.95, dropStart: 8, dropRate: 0.1, floor: 0.5 },
+  wathan: { base: 0.9, dropStart: 7, dropRate: 0.12, floor: 0.4 },
+  lander: { base: 0.85, dropStart: 7, dropRate: 0.15, floor: 0.35 },
+} as const;
+
+export const REP_CAP = 15;
+
+export function estimate1RM(weight: number, reps: number): number | null {
+  if (weight <= 0 || reps < 1 || reps > REP_CAP) return null;
+  if (reps === 1) return weight;
+
+  let total = 0;
+  let wsum = 0;
+  for (const [name, fn] of Object.entries(ONERM_FORMULAS)) {
+    const cfg = ONERM_WEIGHTS[name as keyof typeof ONERM_WEIGHTS];
+    const drop = reps <= cfg.dropStart
+      ? 1
+      : Math.max(cfg.floor, 1 - (reps - cfg.dropStart) * cfg.dropRate);
+    const w = cfg.base * drop;
+    total += fn(weight, reps) * w;
+    wsum += w;
+  }
+  const result = total / wsum;
+  return Number.isFinite(result) && result > 0 ? Number((Math.round(result * 10) / 10).toFixed(1)) : null;
+}
+
+const MUSCLE_HALF_LIFE_MS: Record<string, number> = {
+  side_delts: 24 * 60 * 60 * 1000,
+  rear_delts: 24 * 60 * 60 * 1000,
+  front_delts: 24 * 60 * 60 * 1000,
+  biceps: 24 * 60 * 60 * 1000,
+  triceps: 24 * 60 * 60 * 1000,
+  abs: 24 * 60 * 60 * 1000,
+  chest: 30 * 60 * 60 * 1000,
+  lats: 30 * 60 * 60 * 1000,
+  upper_back: 30 * 60 * 60 * 1000,
+  traps: 30 * 60 * 60 * 1000,
+  quads: 48 * 60 * 60 * 1000,
+  hamstrings: 48 * 60 * 60 * 1000,
+  glutes: 48 * 60 * 60 * 1000,
+  lower_back: 48 * 60 * 60 * 1000,
+  calves: 48 * 60 * 60 * 1000,
+};
+const DEFAULT_HALF_LIFE_MS = 30 * 60 * 60 * 1000;
+
+const muscleDecayFactor = (muscle: string, elapsedMs: number): number => {
+  const halfLife = MUSCLE_HALF_LIFE_MS[muscle] ?? DEFAULT_HALF_LIFE_MS;
+  return Math.pow(0.5, elapsedMs / halfLife);
+};
+
 /**
  * Gets the biomechanical load percentage of bodyweight moved during a calisthenics movement.
  */
@@ -178,7 +243,12 @@ export const processWorkoutForRanks = (
 
     const multiplier = getCalibratedMultiplier(mapping);
     const nameLower = mapping.name.toLowerCase();
-    const isDumbbell = mapping.equipment === 'dumbbell';
+    const mappingType = (mapping as any).type as string | undefined;
+    const isDumbbell =
+      mapping.equipment === 'dumbbell' ||
+      (!!mapping.dumbbellLoad && /db|dumbbell/i.test(mapping.name));
+    const supportsStrengthType = mappingType === 'strength' || mappingType === 'gym';
+    const supportsBodyweightType = mappingType === 'calisthenics' || mapping.equipment === 'bodyweight';
 
     const processSet = (weight: number, reps: number, completedAt?: Date) => {
       // Apply Dumbbell Rule: Dumbbell Weight * 2 * 1.1 for stability
@@ -186,12 +256,12 @@ export const processWorkoutForRanks = (
       if (
         isDumbbell &&
         mapping.dumbbellLoad === 'per_hand' &&
-        (mapping.type === 'strength' || mapping.type === ('gym' as MappedExercise['type']))
+        supportsStrengthType
       ) {
         effectiveWeight = weight * 2;
       }
 
-      const oneRM = calculate1RM(effectiveWeight, reps);
+      const oneRM = estimate1RM(effectiveWeight, reps) ?? 0;
       const score = oneRM * multiplier;
 
       if (score > 0) {
@@ -219,17 +289,16 @@ export const processWorkoutForRanks = (
       }
     };
 
-    const isLegacyBodyweight = mapping.type === ('calisthenics' as MappedExercise['type']);
-    const isBodyweight = mapping.equipment === 'bodyweight' || isLegacyBodyweight;
+    const isBodyweight = mapping.equipment === 'bodyweight' || mappingType === 'calisthenics';
 
-    if (!isBodyweight && (mapping.type === 'strength' || mapping.type === ('gym' as MappedExercise['type']))) {
+    if (!isBodyweight && supportsStrengthType) {
       const gymEx = ex as unknown as GymExercise;
       gymEx.sets.forEach(set => {
         if (set.completed && set.weight && !(set as any).isWarmup) {
           processSet(set.weight, set.reps, set.completedAt);
         }
       });
-    } else if (isBodyweight) {
+    } else if (isBodyweight || supportsBodyweightType) {
       const caliEx = ex as unknown as CalisthenicsExercise;
       const BASE_BODYWEIGHT = bodyweight;
       const bodyweightFactor = getCalisthenicsBodyweightFactor(mapping.name);
@@ -365,7 +434,8 @@ const updateMuscleScore = (
       currentScore: 0,
       bestScore: 0,
       rank: 'dirt',
-      lastTrained: date
+      lastTrained: date,
+      lastWorkedAt: new Date(date).getTime(),
     };
   }
 
@@ -373,6 +443,7 @@ const updateMuscleScore = (
 
   // Update last trained date
   status.lastTrained = date;
+  status.lastWorkedAt = new Date(date).getTime();
 
   const history = [...(status.scoreHistory || []), { date, score: newScore }]
     .slice(-ROLLING_WINDOW_SIZE);
@@ -407,22 +478,17 @@ export const applyDecay = (
   ) as Record<MuscleGroup, MuscleStatus>;
   const today = referenceDate ? new Date(referenceDate) : new Date(getTodayDate());
   const GRACE_PERIOD_DAYS = 21;
-  const DECAY_RATE_WEEKLY = 0.02;
 
   Object.keys(updatedStatuses).forEach(m => {
     const muscle = m as MuscleGroup;
     const status = updatedStatuses[muscle];
 
-    const lastTrained = new Date(status.lastTrained);
-    const diffTime = Math.abs(today.getTime() - lastTrained.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const lastWorkedAt = status.lastWorkedAt ?? new Date(status.lastTrained).getTime();
+    const diffMs = Math.abs(today.getTime() - lastWorkedAt);
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
     if (diffDays > GRACE_PERIOD_DAYS) {
-      // Calculate how many weeks over the grace period
-      const decayWeeks = (diffDays - GRACE_PERIOD_DAYS) / 7;
-      // Compound decay: score = current * (1 - rate)^weeks
-      const decayFactor = Math.pow(1 - DECAY_RATE_WEEKLY, decayWeeks);
-
+      const decayFactor = muscleDecayFactor(muscle, diffMs);
       status.currentScore = status.currentScore * decayFactor;
       status.rank = getRankForScore(muscle, status.currentScore, gender);
     }
