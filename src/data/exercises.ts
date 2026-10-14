@@ -146,7 +146,7 @@ const PREDEFINED_EXERCISES_RAW: MappedExercise[] = [
     name: "Seated Cable Row",
     type: 'strength',
     primaryMuscles: ["lats", "upper_back"],
-    secondaryMuscles: ["biceps"],
+    secondaryMuscles: ["biceps", "front_delts"],
     difficultyMultiplier: 0.75,
     mechanic: 'compound',
     equipment: 'cable'
@@ -6730,16 +6730,6 @@ const PREDEFINED_EXERCISES_RAW: MappedExercise[] = [
     difficultyMultiplier: 1.0,
     mechanic: 'isolation',
     equipment: 'bodyweight'
-  },
-  {
-    id: 'ex_674',
-    name: "Seated Cable Rows",
-    type: 'strength',
-    primaryMuscles: ["upper_back"],
-    secondaryMuscles: ["biceps", "lats", "front_delts"],
-    difficultyMultiplier: 1.0,
-    mechanic: 'compound',
-    equipment: 'cable'
   },
   {
     id: 'ex_675',
