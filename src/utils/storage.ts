@@ -26,6 +26,9 @@ export const STORAGE_KEYS = {
   RECENT_FOODS: '@gymapp_recent_foods',
   USER_FOODS: '@gymapp_user_foods',
   LIBRARY_FOLDERS: '@gymapp_library_folders',
+  REST_TIMER_SOUND: '@gymapp_rest_timer_sound',
+  REST_TIMER_VIBRATION: '@gymapp_rest_timer_vibration',
+  REST_TIMER_NOTIFICATION: '@gymapp_rest_timer_notification',
 } as const;
 
 // Generic storage functions

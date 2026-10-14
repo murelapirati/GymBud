@@ -1,10 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Vibration, Alert } from 'react-native';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import { AppState, Alert } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import * as Notifications from 'expo-notifications';
+import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 import { StrengthSet, WorkoutTemplate, TemplateExercise, Workout } from '../types';
 import { useBodyMap } from './BodyMapContext';
 import { persistCompletedWorkout } from '../utils/workoutPersistence';
 import { createUniqueId } from '../utils/uniqueId';
+import { getExtendedEndTimestamp, getRemainingSeconds, hasTimerEnded } from '../utils/restTimer';
+
+const REST_TIMER_BEEP = require('../../assets/sounds/rest-timer-beep.wav');
 
 export type WorkoutType = 'strength' | 'cardio' | 'stretching';
 
@@ -125,6 +131,9 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
   const [restTimerCompleted, setRestTimerCompleted] = useState(false);
   const [activeRestExerciseId, setActiveRestExerciseId] = useState<string | null>(null);
   const [activeRestSetId, setActiveRestSetId] = useState<string | null>(null);
+  const notificationIdRef = useRef<string | null>(null);
+  const notificationPermissionRequestedRef = useRef(false);
+  const player = useAudioPlayer(REST_TIMER_BEEP);
   
   // Stretching timer state
   const [activeStretchTimer, setActiveStretchTimer] = useState<number | null>(null);
@@ -133,6 +142,100 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
   const [activeStretchId, setActiveStretchId] = useState<string | null>(null);
   
   const { updateRanksFromWorkout } = useBodyMap();
+
+  useEffect(() => {
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      interruptionMode: 'duckOthers',
+    }).catch(error => {
+      if (__DEV__) console.warn('Unable to configure rest timer audio:', error);
+    });
+  }, []);
+
+  const cancelRestNotification = async () => {
+    if (!notificationIdRef.current) return;
+    try {
+      await Notifications.cancelScheduledNotificationAsync(notificationIdRef.current);
+    } catch (error) {
+      if (__DEV__) console.warn('Unable to cancel rest timer notification:', error);
+    } finally {
+      notificationIdRef.current = null;
+    }
+  };
+
+  const scheduleRestNotification = async (endTime: Date) => {
+    await cancelRestNotification();
+    const notificationEnabled = await storage.getItem<boolean>(STORAGE_KEYS.REST_TIMER_NOTIFICATION);
+    if (notificationEnabled === false) return;
+
+    try {
+      const permissions = await Notifications.getPermissionsAsync();
+      let status = permissions.status;
+      if (status !== 'granted' && !notificationPermissionRequestedRef.current) {
+        notificationPermissionRequestedRef.current = true;
+        status = (await Notifications.requestPermissionsAsync()).status;
+      }
+      if (status !== 'granted') return;
+
+      notificationIdRef.current = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Rest over',
+          body: 'Time for your next set',
+          // iOS notification sounds follow the silent switch; this is intentional.
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: endTime,
+        },
+      });
+    } catch (error) {
+      if (__DEV__) console.warn('Unable to schedule rest timer notification:', error);
+    }
+  };
+
+  const alertRestTimer = async () => {
+    const [soundEnabled, vibrationEnabled] = await Promise.all([
+      storage.getItem<boolean>(STORAGE_KEYS.REST_TIMER_SOUND),
+      storage.getItem<boolean>(STORAGE_KEYS.REST_TIMER_VIBRATION),
+    ]);
+    if (vibrationEnabled !== false) {
+      for (let i = 0; i < 3; i += 1) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (i < 2) await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+    if (soundEnabled !== false) {
+      try {
+        player.seekTo(0);
+        player.play();
+      } catch (error) {
+        if (__DEV__) console.warn('Unable to play rest timer sound:', error);
+      }
+    }
+  };
+
+  const completeRestTimer = (playAlert: boolean) => {
+    if (activeRestExerciseId && activeRestSetId) {
+      setExercises(prev => prev.map(ex => {
+        if (ex.id === activeRestExerciseId && ex.sets) {
+          return {
+            ...ex,
+            sets: ex.sets.map(s => s.id === activeRestSetId ? { ...s, restTime: restTimerInitialSeconds } : s),
+          };
+        }
+        return ex;
+      }));
+    }
+
+    setActiveRestTimer(null);
+    setRestTimerEndTime(null);
+    setRestTimerInitialSeconds(0);
+    setRestTimerCompleted(true);
+    setActiveRestExerciseId(null);
+    setActiveRestSetId(null);
+    void cancelRestNotification();
+    if (playAlert) void alertRestTimer();
+  };
 
   // Update workout duration every second
   useEffect(() => {
@@ -152,30 +255,10 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     if (activeRestTimer === null || !restTimerEndTime) return;
 
     const interval = setInterval(() => {
-      const now = new Date();
-      const remaining = Math.floor((restTimerEndTime.getTime() - now.getTime()) / 1000);
+      const remaining = getRemainingSeconds(restTimerEndTime.getTime());
       
       if (remaining <= 0) {
-        if (activeRestExerciseId && activeRestSetId) {
-          setExercises(prev => prev.map(ex => {
-            if (ex.id === activeRestExerciseId && ex.sets) {
-              return {
-                ...ex,
-                sets: ex.sets.map(s => s.id === activeRestSetId ? { ...s, restTime: restTimerInitialSeconds } : s),
-              };
-            }
-            return ex;
-          }));
-        }
-
-        setActiveRestTimer(null);
-        setRestTimerEndTime(null);
-        setRestTimerInitialSeconds(0);
-        setRestTimerCompleted(true);
-        setActiveRestExerciseId(null);
-        setActiveRestSetId(null);
-        // Vibration pattern: vibrate 5 times (500ms vibrate, 200ms pause)
-        Vibration.vibrate([0, 500, 200, 500, 200, 500, 200, 500, 200, 500]);
+        completeRestTimer(true);
       } else {
         setActiveRestTimer(remaining);
       }
@@ -183,6 +266,19 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
 
     return () => clearInterval(interval);
   }, [activeRestTimer, restTimerEndTime, activeRestExerciseId, activeRestSetId, restTimerInitialSeconds]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active' && restTimerEndTime && activeRestTimer !== null) {
+        if (hasTimerEnded(restTimerEndTime.getTime())) {
+          completeRestTimer(false);
+        } else {
+          setActiveRestTimer(getRemainingSeconds(restTimerEndTime.getTime()));
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [activeRestTimer, restTimerEndTime]);
 
   // Update stretch timer countdown
   useEffect(() => {
@@ -202,8 +298,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
             ex.id === activeStretchId ? { ...ex, completed: true } : ex
           ));
         }
-        // Vibration pattern: vibrate 3 times
-        Vibration.vibrate([0, 500, 200, 500, 200, 500]);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         setActiveStretchTimer(remaining);
       }
@@ -326,6 +421,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
 
   const finishWorkout = async (notes?: string, intensity?: number) => {
     if (!workoutStartTime) return;
+    await cancelRestNotification();
 
     try {
       const endTime = new Date();
@@ -380,6 +476,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
   };
 
   const cancelWorkout = () => {
+    void cancelRestNotification();
     setIsWorkoutActive(false);
     setWorkoutStartTime(null);
     setWorkoutDuration(0);
@@ -629,15 +726,18 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
       setRestTimerCompleted(false);
       setActiveRestExerciseId(exerciseId || null);
       setActiveRestSetId(setId || null);
+      void scheduleRestNotification(endTime);
     }
   };
 
   const addExtraRestTime = (seconds: number) => {
     if (activeRestTimer !== null && restTimerEndTime) {
-      const newEndTime = new Date(restTimerEndTime.getTime() + seconds * 1000);
-      setActiveRestTimer(activeRestTimer + seconds);
+      const newEndTimestamp = getExtendedEndTimestamp(restTimerEndTime.getTime(), seconds);
+      const newEndTime = new Date(newEndTimestamp);
+      setActiveRestTimer(getRemainingSeconds(newEndTimestamp));
       setRestTimerEndTime(newEndTime);
       setRestTimerInitialSeconds(restTimerInitialSeconds + seconds);
+      void scheduleRestNotification(newEndTime);
     }
   };
 
@@ -661,6 +761,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     setRestTimerCompleted(false);
     setActiveRestExerciseId(null);
     setActiveRestSetId(null);
+    void cancelRestNotification();
   };
 
   const finishExercise = (exerciseId: string) => {
