@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { storage, STORAGE_KEYS } from '../utils/storage';
+import { deleteLibraryFolder, FolderDeleteMode } from '../utils/libraryFolders';
 import type { WorkoutTemplate, WorkoutType, TemplateExercise, Recipe, LibraryFolder, LibraryFolderType } from '../types';
 import RecipeEditScreen from './RecipeEditScreen';
 import ExerciseSelectionModal from '../components/ExerciseSelectionModal';
@@ -152,6 +153,57 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
     setNewFolderName('');
     setNewFolderParentId(undefined);
     setShowFolderModal(false);
+  };
+
+  const persistFolderDeletion = async (folder: LibraryFolder, mode: FolderDeleteMode) => {
+    try {
+      const result = deleteLibraryFolder(folder.id, mode, folders, templates, recipes);
+      await Promise.all([
+        storage.setItem(STORAGE_KEYS.LIBRARY_FOLDERS, result.folders),
+        storage.setItem(STORAGE_KEYS.WORKOUT_TEMPLATES, result.templates),
+        storage.setItem(STORAGE_KEYS.RECIPES, result.recipes),
+      ]);
+      setFolders(result.folders);
+      setTemplates(result.templates);
+      setRecipes(result.recipes);
+    } catch (error) {
+      console.error('Error deleting folder:', error);
+      Alert.alert('Error', 'Failed to delete folder');
+    }
+  };
+
+  const handleDeleteFolder = (folder: LibraryFolder) => {
+    if (folder.isSystem) return;
+
+    const preview = deleteLibraryFolder(folder.id, 'move_contents_to_root', folders, templates, recipes);
+    const childFolderCount = preview.affectedFolderCount - 1;
+    const affectedItemCount = preview.affectedItemCount;
+
+    if (affectedItemCount === 0 && childFolderCount === 0) {
+      void persistFolderDeletion(folder, 'delete_contents');
+      return;
+    }
+
+    const itemLabel = `${affectedItemCount} item${affectedItemCount === 1 ? '' : 's'}`;
+    const folderLabel = childFolderCount > 0
+      ? ` and ${childFolderCount} subfolder${childFolderCount === 1 ? '' : 's'}`
+      : '';
+    Alert.alert(
+      `Delete "${folder.name}"?`,
+      `This will affect ${itemLabel}${folderLabel}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete folder, move contents to root',
+          onPress: () => void persistFolderDeletion(folder, 'move_contents_to_root'),
+        },
+        {
+          text: 'Delete folder and everything inside',
+          style: 'destructive',
+          onPress: () => void persistFolderDeletion(folder, 'delete_contents'),
+        },
+      ],
+    );
   };
 
   const openFolderModal = (type: LibraryFolderType, parentId?: string) => {
@@ -529,17 +581,27 @@ export default function LibraryScreen({ onOpenSettings }: LibraryScreenProps) {
         {currentFolders.length > 0 && (
           <View style={styles.folderGrid}>
             {currentFolders.map(folder => (
-              <TouchableOpacity
+              <View
                 key={folder.id}
                 style={[styles.folderCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-                onPress={() => openFolder(folder.id)}
               >
-                <Ionicons name="folder" size={28} color={theme.primary} />
-                <Text style={[styles.folderCardName, { color: theme.text }]} numberOfLines={1}>{folder.name}</Text>
-                <Text style={[styles.folderCardMeta, { color: theme.textSecondary }]}>
-                  {folders.some(item => item.parentId === folder.id) ? 'Subfolders' : 'Open folder'}
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity onPress={() => openFolder(folder.id)} style={styles.folderCardContent}>
+                  <Ionicons name="folder" size={28} color={theme.primary} />
+                  <Text style={[styles.folderCardName, { color: theme.text }]} numberOfLines={1}>{folder.name}</Text>
+                  <Text style={[styles.folderCardMeta, { color: theme.textSecondary }]}>
+                    {folders.some(item => item.parentId === folder.id) ? 'Subfolders' : 'Open folder'}
+                  </Text>
+                </TouchableOpacity>
+                {!folder.isSystem && (
+                  <TouchableOpacity
+                    onPress={() => handleDeleteFolder(folder)}
+                    style={styles.folderDeleteButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={theme.error} />
+                  </TouchableOpacity>
+                )}
+              </View>
             ))}
           </View>
         )}
@@ -1089,6 +1151,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 14,
     justifyContent: 'space-between',
+  },
+  folderCardContent: {
+    flex: 1,
+  },
+  folderDeleteButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    padding: 4,
   },
   folderCardName: {
     fontSize: 14,
