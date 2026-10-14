@@ -59,10 +59,48 @@ export const getMuscleThresholds = (
   return thresholds.map(threshold => Math.round(threshold * scale * 100) / 100);
 };
 
+export const ONERM_FORMULAS = {
+  epley: (w: number, r: number) => w * (1 + r / 30),
+  brzycki: (w: number, r: number) => w * 36 / (37 - r),
+  lombardi: (w: number, r: number) => w * Math.pow(r, 0.1),
+  oconner: (w: number, r: number) => w * (1 + r / 40),
+  mayhew: (w: number, r: number) => (w * 100) / (52.2 + 41.9 * Math.exp(-0.055 * r)),
+  wathan: (w: number, r: number) => (w * 100) / (48.8 + 53.8 * Math.exp(-0.075 * r)),
+  lander: (w: number, r: number) => (w * 100) / (101.3 - 2.67123 * r),
+} as const;
+
+export const ONERM_WEIGHTS = {
+  epley: { base: 0.95, dropStart: 6, dropRate: 0.12, floor: 0.4 },
+  brzycki: { base: 1.1, dropStart: 8, dropRate: 0.18, floor: 0.3 },
+  lombardi: { base: 0.85, dropStart: 5, dropRate: 0.1, floor: 0.4 },
+  oconner: { base: 0.9, dropStart: 6, dropRate: 0.12, floor: 0.4 },
+  mayhew: { base: 0.95, dropStart: 8, dropRate: 0.1, floor: 0.5 },
+  wathan: { base: 0.9, dropStart: 7, dropRate: 0.12, floor: 0.4 },
+  lander: { base: 0.85, dropStart: 7, dropRate: 0.15, floor: 0.35 },
+} as const;
+
+export const REP_CAP = 15;
+
+export const estimate1RM = (weight: number, reps: number): number | null => {
+  if (weight <= 0 || reps < 1 || reps > REP_CAP) return null;
+  if (reps === 1) return weight;
+
+  let total = 0;
+  let wsum = 0;
+  for (const [name, fn] of Object.entries(ONERM_FORMULAS)) {
+    const cfg = ONERM_WEIGHTS[name as keyof typeof ONERM_WEIGHTS];
+    const drop = reps <= cfg.dropStart ? 1 : Math.max(cfg.floor, 1 - (reps - cfg.dropStart) * cfg.dropRate);
+    const w = cfg.base * drop;
+    total += fn(weight, reps) * w;
+    wsum += w;
+  }
+  const result = total / wsum;
+  return Number.isFinite(result) && result > 0 ? Number((Math.round(result * 10) / 10).toFixed(1)) : null;
+};
+
 export const calculate1RM = (weight: number, reps: number): number => {
   if (reps === 0) return 0;
-  if (reps === 1) return weight;
-  return weight * (1 + reps / 30);
+  return estimate1RM(weight, reps) ?? 0;
 };
 
 export const getRankForScore = (
