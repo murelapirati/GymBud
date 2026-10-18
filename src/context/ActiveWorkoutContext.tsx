@@ -9,6 +9,7 @@ import { useBodyMap } from './BodyMapContext';
 import { persistCompletedWorkout } from '../utils/workoutPersistence';
 import { createUniqueId } from '../utils/uniqueId';
 import { getExtendedEndTimestamp, getRemainingSeconds, hasTimerEnded } from '../utils/restTimer';
+import { reorderExercisesWithLinkClearing } from '../utils/exerciseReorder';
 
 const REST_TIMER_BEEP = require('../../assets/sounds/rest-timer-beep.wav');
 
@@ -99,6 +100,7 @@ interface ActiveWorkoutContextType {
   // Common
   deleteExercise: (exerciseId: string) => void;
   moveExercise: (exerciseId: string, direction: 'up' | 'down') => void;
+  reorderExercises: (fromIndex: number, toIndex: number) => void;
   startRestTimer: (seconds: number, exerciseId?: string, setId?: string) => void;
   addExtraRestTime: (seconds: number) => void;
   cancelRestTimer: () => void;
@@ -484,8 +486,14 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     setExercises([]);
     setActiveRestTimer(null);
     setRestTimerEndTime(null);
+    setRestTimerInitialSeconds(0);
+    setRestTimerCompleted(false);
     setActiveRestExerciseId(null);
     setActiveRestSetId(null);
+    setActiveStretchTimer(null);
+    setStretchTimerEndTime(null);
+    setStretchTimerCompleted(false);
+    setActiveStretchId(null);
   };
 
   const addExercise = (name: string, restTimer: number) => {
@@ -699,21 +707,17 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
     setExercises(prev => prev.filter(ex => ex.id !== exerciseId));
   };
 
+  const reorderExercises = (fromIndex: number, toIndex: number) => {
+    setExercises(prev => reorderExercisesWithLinkClearing(prev, fromIndex, toIndex));
+  };
+
   const moveExercise = (exerciseId: string, direction: 'up' | 'down') => {
     setExercises(prev => {
       const currentIndex = prev.findIndex(ex => ex.id === exerciseId);
       if (currentIndex === -1) return prev;
       
       const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-      
-      // Check bounds
-      if (newIndex < 0 || newIndex >= prev.length) return prev;
-      
-      // Swap exercises
-      const newExercises = [...prev];
-      [newExercises[currentIndex], newExercises[newIndex]] = [newExercises[newIndex], newExercises[currentIndex]];
-      
-      return newExercises;
+      return reorderExercisesWithLinkClearing(prev, currentIndex, newIndex);
     });
   };
 
@@ -812,6 +816,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
         toggleSetWarmup,
         deleteExercise,
         moveExercise,
+        reorderExercises,
         addCardioActivity,
         startCardioTimer,
         pauseCardioTimer,

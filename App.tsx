@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Modal } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { SectionKey } from './src/utils/theme';
 import { ActiveWorkoutProvider, useActiveWorkout } from './src/context/ActiveWorkoutContext';
@@ -16,7 +18,6 @@ import CaloriesScreen from './src/screens/CaloriesScreen';
 import LibraryScreen from './src/screens/LibraryScreen';
 import WorkoutsScreen from './src/screens/WorkoutsScreen';
 import ActiveWorkoutScreen from './src/screens/ActiveWorkoutScreen';
-import RestTimerScreen from './src/screens/RestTimerScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import GoalsScreen from './src/screens/GoalsScreen';
 import WorkoutGoalsScreen from './src/screens/WorkoutGoalsScreen';
@@ -39,8 +40,7 @@ type RootScreen =
   | 'settings'
   | 'goals'
   | 'workoutGoals'
-  | 'activeWorkout'
-  | 'restTimer';
+  | 'activeWorkout';
 
 const tabScreens: Array<{
   key: Extract<RootScreen, 'calories' | 'library' | 'workouts' | 'ranks'>;
@@ -69,13 +69,6 @@ function MainApp() {
     clearStretchTimerCompleted 
   } = useActiveWorkout();
 
-  // Auto-navigate to rest timer screen when timer starts
-  useEffect(() => {
-    if (restTimerInitialSeconds > 0) {
-      setScreen('restTimer');
-    }
-  }, [restTimerInitialSeconds]);
-
   // Handle stretch timer completion
   useEffect(() => {
     if (stretchTimerCompleted) {
@@ -84,16 +77,7 @@ function MainApp() {
     }
   }, [stretchTimerCompleted, clearStretchTimerCompleted]);
 
-  const handleRestTimerComplete = () => {
-    clearRestTimerCompleted();
-    setScreen('activeWorkout');
-  };
-
   const renderScreen = () => {
-    if (screen === 'restTimer') {
-      return <RestTimerScreen onBack={() => setScreen('activeWorkout')} />;
-    }
-
     if (screen === 'activeWorkout') {
       return <ActiveWorkoutScreen 
         onBack={() => {
@@ -158,30 +142,7 @@ function MainApp() {
       {isWorkoutActive && screen !== 'activeWorkout' && (
         <ActiveWorkoutStatusBar onPress={() => setScreen('activeWorkout')} />
       )}
-      {activeRestTimer && activeRestTimer > 0 && screen !== 'restTimer' && screen === 'activeWorkout' && (
-        <RestTimerStatusBar onPress={() => setScreen('restTimer')} />
-      )}
-      
-      {/* Rest Timer Completion Modal */}
-      <Modal visible={restTimerCompleted} transparent={true} animationType="fade">
-        <View style={styles.completionOverlay}>
-          <View style={[styles.completionContent, { backgroundColor: theme.card, borderColor: theme.border, shadowColor: theme.primary }]}>
-            <View style={[styles.completionIconContainer, { backgroundColor: theme.primary + '25' }]}>
-              <Ionicons name="checkmark-circle" size={72} color={theme.primary} />
-            </View>
-            <Text style={[styles.completionTitle, { color: theme.text }]}>Rest Complete!</Text>
-            <Text style={[styles.completionSubtitle, { color: theme.textSecondary }]}>
-              Ready for your next set
-            </Text>
-            <TouchableOpacity
-              style={[styles.completionButton, { backgroundColor: theme.primary }]}
-              onPress={handleRestTimerComplete}
-            >
-              <Text style={styles.completionButtonText}>Let's Go 💪</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <RestTimerStatusBar onPress={() => setScreen('activeWorkout')} />
       
       <View style={styles.content}>
         <GlobalDateWarning />
@@ -242,37 +203,35 @@ export default function App() {
       .finally(() => setIsBootstrapped(true));
   }, []);
 
-  if (!isBootstrapped) {
-    return (
-      <SafeAreaProvider>
-        <View style={styles.container} />
-      </SafeAreaProvider>
-    );
-  }
-
-  if (bootstrapError) {
-    return (
-      <SafeAreaProvider>
-        <View style={[styles.container, styles.bootstrapError]}>
-          <Text style={styles.bootstrapErrorTitle}>GymBud could not start</Text>
-          <Text style={styles.bootstrapErrorText}>{bootstrapError}</Text>
-        </View>
-      </SafeAreaProvider>
-    );
-  }
-
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <GlobalDateProvider>
-          <BodyMapProvider>
-            <ActiveWorkoutProvider>
-              <MainApp />
-            </ActiveWorkoutProvider>
-          </BodyMapProvider>
-        </GlobalDateProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        {!isBootstrapped ? (
+          <SafeAreaProvider>
+            <View style={styles.container} />
+          </SafeAreaProvider>
+        ) : bootstrapError ? (
+          <SafeAreaProvider>
+            <View style={[styles.container, styles.bootstrapError]}>
+              <Text style={styles.bootstrapErrorTitle}>GymBud could not start</Text>
+              <Text style={styles.bootstrapErrorText}>{bootstrapError}</Text>
+            </View>
+          </SafeAreaProvider>
+        ) : (
+          <SafeAreaProvider>
+            <ThemeProvider>
+              <GlobalDateProvider>
+                <BodyMapProvider>
+                  <ActiveWorkoutProvider>
+                    <MainApp />
+                  </ActiveWorkoutProvider>
+                </BodyMapProvider>
+              </GlobalDateProvider>
+            </ThemeProvider>
+          </SafeAreaProvider>
+        )}
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }
 
