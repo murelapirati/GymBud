@@ -5,7 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useActiveWorkout } from '../context/ActiveWorkoutContext';
 
 interface RestTimerStatusBarProps {
-  onPress: () => void;
+  onPress?: () => void;
 }
 
 const RestTimerStatusBar: React.FC<RestTimerStatusBarProps> = ({ onPress }) => {
@@ -33,7 +33,8 @@ const RestTimerStatusBar: React.FC<RestTimerStatusBarProps> = ({ onPress }) => {
       <TouchableOpacity
         style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}
         onPress={onPress}
-        activeOpacity={0.8}
+        disabled={!onPress}
+        activeOpacity={onPress ? 0.8 : 1}
       >
         <View style={styles.content}>
           <View style={styles.leftSection}>
@@ -59,7 +60,8 @@ const RestTimerStatusBar: React.FC<RestTimerStatusBarProps> = ({ onPress }) => {
     <TouchableOpacity
       style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}
       onPress={onPress}
-      activeOpacity={0.8}
+      disabled={!onPress}
+      activeOpacity={onPress ? 0.8 : 1}
     >
       <View style={styles.content}>
         <View style={styles.leftSection}>

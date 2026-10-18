@@ -12,7 +12,6 @@ import { GlobalDateProvider } from './src/context/GlobalDateContext';
 import { BodyMapProvider } from './src/context/BodyMapContext';
 import { migrateWorkoutTypes, seedDefaultTemplates } from './src/utils/bootstrap';
 import ActiveWorkoutStatusBar from './src/components/ActiveWorkoutStatusBar';
-import RestTimerStatusBar from './src/components/RestTimerStatusBar';
 import GlobalDateWarning from './src/components/GlobalDateWarning';
 import CaloriesScreen from './src/screens/CaloriesScreen';
 import LibraryScreen from './src/screens/LibraryScreen';
@@ -142,7 +141,6 @@ function MainApp() {
       {isWorkoutActive && screen !== 'activeWorkout' && (
         <ActiveWorkoutStatusBar onPress={() => setScreen('activeWorkout')} />
       )}
-      <RestTimerStatusBar onPress={() => setScreen('activeWorkout')} />
       
       <View style={styles.content}>
         <GlobalDateWarning />

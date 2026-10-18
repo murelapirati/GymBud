@@ -34,6 +34,7 @@ import {
 } from '../utils/workoutCard';
 import type { WorkoutTemplate, TemplateExercise } from '../types';
 import ExerciseSelectionModal from '../components/ExerciseSelectionModal';
+import RestTimerStatusBar from '../components/RestTimerStatusBar';
 import DraggableExerciseList, {
   DragErrorBoundary,
   GripHandle,
@@ -779,6 +780,9 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Rest bar (only while resting or rest over, under header) */}
+      <RestTimerStatusBar />
 
       {/* Main List */}
       <View style={styles.listContainer}>
