@@ -140,9 +140,6 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
   const [justFinishedExercises, setJustFinishedExercises] = useState<any[]>([]);
   const [justFinishedWorkoutType, setJustFinishedWorkoutType] = useState<string | null>(null);
 
-  // Header "..." workout options menu
-  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
-
   // Fallback for manual reorder if drag fails
   const [manualReorderMode, setManualReorderMode] = useState(false);
 
@@ -314,10 +311,6 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
       ]
     );
   }, [safeExercises, cancelWorkout, onBack]);
-
-  const handleHeaderBack = useCallback(() => {
-    handleDiscardWorkout();
-  }, [handleDiscardWorkout]);
 
   const generateTemplateName = (exList: any[]): string => {
     if (exList.length === 0) return 'Workout Template';
@@ -755,7 +748,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={handleHeaderBack}
+          onPress={onBack}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="chevron-back" size={24} color={theme.text} />
@@ -772,11 +765,11 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
 
         <View style={styles.headerRightGroup}>
           <TouchableOpacity
-            style={styles.headerMoreButton}
-            onPress={() => setShowHeaderMenu(true)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={[styles.discardHeaderButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            onPress={handleDiscardWorkout}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
-            <Ionicons name="ellipsis-horizontal" size={20} color={theme.text} />
+            <Text style={[styles.discardHeaderButtonText, { color: theme.error }]}>Discard</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.finishHeaderButton, { backgroundColor: theme.primary }]}
@@ -830,38 +823,6 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
           setShowExerciseSelection(false);
         }}
       />
-
-      {/* Header "..." Workout Options Bottom Sheet */}
-      <Modal visible={showHeaderMenu} transparent animationType="fade" onRequestClose={() => setShowHeaderMenu(false)}>
-        <TouchableWithoutFeedback onPress={() => setShowHeaderMenu(false)}>
-          <View style={styles.sheetBackdrop}>
-            <TouchableWithoutFeedback>
-              <View style={[styles.actionSheetContainer, { backgroundColor: theme.card }]}>
-                <View style={styles.sheetHandle} />
-                <Text style={[styles.actionSheetTitle, { color: theme.text }]}>Workout Options</Text>
-
-                <TouchableOpacity
-                  style={styles.sheetActionItem}
-                  onPress={() => {
-                    setShowHeaderMenu(false);
-                    handleDiscardWorkout();
-                  }}
-                >
-                  <Ionicons name="trash-outline" size={20} color={theme.error} />
-                  <Text style={[styles.sheetActionItemText, { color: theme.error }]}>Discard workout</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.sheetCancelItem, { backgroundColor: theme.surface }]}
-                  onPress={() => setShowHeaderMenu(false)}
-                >
-                  <Text style={[styles.sheetCancelItemText, { color: theme.textSecondary }]}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
 
       {/* Exercise "..." Action Bottom Sheet */}
       <Modal visible={Boolean(menuExercise)} transparent animationType="fade">
@@ -1154,10 +1115,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  headerMoreButton: {
-    padding: 6,
+  discardHeaderButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  discardHeaderButtonText: {
+    fontWeight: '700',
+    fontSize: 14,
   },
   finishHeaderButton: {
     paddingVertical: 6,
