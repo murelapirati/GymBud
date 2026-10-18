@@ -723,6 +723,20 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
 
   const startRestTimer = (seconds: number, exerciseId?: string, setId?: string) => {
     if (seconds > 0) {
+      // If a rest timer was already running on a previous set, record its elapsed rest time
+      if (activeRestExerciseId && activeRestSetId && activeRestTimer !== null) {
+        const elapsed = Math.max(0, restTimerInitialSeconds - activeRestTimer);
+        setExercises(prev => prev.map(ex => {
+          if (ex.id === activeRestExerciseId && ex.sets) {
+            return {
+              ...ex,
+              sets: ex.sets.map(s => s.id === activeRestSetId ? { ...s, restTime: elapsed } : s),
+            };
+          }
+          return ex;
+        }));
+      }
+
       const endTime = new Date(Date.now() + seconds * 1000);
       setActiveRestTimer(seconds);
       setRestTimerEndTime(endTime);
@@ -747,7 +761,7 @@ export const ActiveWorkoutProvider: React.FC<ActiveWorkoutProviderProps> = ({ ch
 
   const cancelRestTimer = () => {
     if (activeRestExerciseId && activeRestSetId) {
-      const actualRest = restTimerInitialSeconds - (activeRestTimer || 0);
+      const actualRest = Math.max(0, restTimerInitialSeconds - (activeRestTimer || 0));
       setExercises(prev => prev.map(ex => {
         if (ex.id === activeRestExerciseId && ex.sets) {
           return {

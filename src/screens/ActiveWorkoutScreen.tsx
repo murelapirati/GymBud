@@ -31,6 +31,7 @@ import {
   getSetNumbering,
   getLastWorkoutTopSet,
   formatTopSetDisplay,
+  formatRestTime,
 } from '../utils/workoutCard';
 import type { WorkoutTemplate, TemplateExercise } from '../types';
 import ExerciseSelectionModal from '../components/ExerciseSelectionModal';
@@ -94,6 +95,8 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
     startStretchTimer,
     completeStretch,
     startRestTimer,
+    activeRestTimer,
+    activeRestSetId,
   } = useActiveWorkout();
 
   // History for "Last: ..." top set lookup
@@ -180,13 +183,9 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
     [theme]
   );
 
-  // Pre-fill calculation for an exercise's entry row
-  const getEntryValues = useCallback(
+  // Automated placeholder calculation for an exercise's entry row
+  const getPlaceholderValues = useCallback(
     (exercise: any) => {
-      const draft = draftInputs[exercise.id];
-      if (draft !== undefined) {
-        return draft;
-      }
       // 1. Last logged set in this exercise this session
       if (exercise.sets && exercise.sets.length > 0) {
         const last = exercise.sets[exercise.sets.length - 1];
@@ -205,7 +204,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
       // 3. Empty default
       return { weight: '', reps: '' };
     },
-    [draftInputs, measurementSystem, workoutHistory]
+    [measurementSystem, workoutHistory]
   );
 
   const handleLogSet = useCallback(
@@ -213,14 +212,20 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
       const exercise = safeExercises.find((e) => e.id === exerciseId);
       if (!exercise) return;
 
-      const currentVals = getEntryValues(exercise);
-      const repsNum = parseInt(currentVals.reps, 10);
+      const placeholders = getPlaceholderValues(exercise);
+      const draft = draftInputs[exerciseId];
+      const typedWeight = draft?.weight?.trim();
+      const typedReps = draft?.reps?.trim();
+
+      const finalRepsStr = typedReps !== undefined && typedReps !== '' ? typedReps : placeholders.reps;
+      const repsNum = parseInt(finalRepsStr, 10);
       if (isNaN(repsNum) || repsNum <= 0) {
         Alert.alert('Invalid reps', 'Please enter a valid number of reps.');
         return;
       }
 
-      const weightInput = currentVals.weight ? parseFloat(currentVals.weight) : undefined;
+      const finalWeightStr = typedWeight !== undefined && typedWeight !== '' ? typedWeight : placeholders.weight;
+      const weightInput = finalWeightStr ? parseFloat(finalWeightStr) : undefined;
       const weightInLbs =
         weightInput !== undefined && !isNaN(weightInput)
           ? convertWeightToStorage(weightInput, measurementSystem)
@@ -231,10 +236,10 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
       // 1. Commit set immediately
       const setId = logSet(exerciseId, repsNum, weightInLbs, 0, isWarmup);
 
-      // 2. Pre-fill next set with current values and reset warmup toggle
+      // 2. Clear typed input so the new automated placeholder (from this newly logged set) shows through
       setDraftInputs((prev) => ({
         ...prev,
-        [exerciseId]: { weight: currentVals.weight, reps: currentVals.reps },
+        [exerciseId]: { weight: '', reps: '' },
       }));
       setWarmupToggles((prev) => ({
         ...prev,
@@ -246,7 +251,7 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
       setRestSheetCustomMode(false);
       setShowRestSheet(true);
     },
-    [safeExercises, getEntryValues, measurementSystem, warmupToggles, logSet]
+    [safeExercises, getPlaceholderValues, draftInputs, measurementSystem, warmupToggles, logSet]
   );
 
   const handleStartRestTimer = (seconds: number) => {
@@ -402,15 +407,10 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
 
   const renderStrengthCard = (exercise: any) => {
     const meta = getExerciseMetadata(exercise.name);
-    const mechLabel = meta?.mechanic
-      ? meta.mechanic.charAt(0).toUpperCase() + meta.mechanic.slice(1)
-      : '';
     const equipment = meta?.equipment || (exercise.type === 'strength' ? 'other' : undefined);
     const badgeColors = getEquipmentBadgeColor(equipment);
-    const topSet = getLastWorkoutTopSet(exercise.name, workoutHistory);
-    const lastDisplay = formatTopSetDisplay(topSet, measurementSystem);
     const isWarmupActive = Boolean(warmupToggles[exercise.id]);
-    const entryVals = getEntryValues(exercise);
+    const placeholders = getPlaceholderValues(exercise);
     const unitLabel = getWeightUnit(measurementSystem);
     const setNumbers = getSetNumbering(exercise.sets || []);
 
@@ -443,19 +443,8 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
           </TouchableOpacity>
         </View>
 
-        {/* Sub-line: Mechanic - Last: ... [Warm-up pill] */}
+        {/* Sub-line: [Warm-up pill] */}
         <View style={styles.subLine}>
-          <View style={styles.subLineLeft}>
-            {mechLabel ? <Text style={[styles.subLineText, { color: theme.textSecondary }]}>{mechLabel}</Text> : null}
-            {mechLabel && lastDisplay ? (
-              <Text style={[styles.subLineText, { color: theme.textSecondary }]}> - </Text>
-            ) : null}
-            {lastDisplay ? (
-              <Text style={[styles.subLineText, { color: theme.textSecondary }]}>
-                Last: {lastDisplay}
-              </Text>
-            ) : null}
-          </View>
           <TouchableOpacity
             style={[
               styles.warmupPill,
@@ -614,6 +603,31 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
                     <Text style={[styles.loggedSetText, { color: theme.text }]}>
                       {formattedWeight ? `${formattedWeight} ${unitLabel}` : `0 ${unitLabel}`} x {set.reps}
                     </Text>
+                    {(() => {
+                      const isActivelyResting =
+                        activeRestSetId === set.id && activeRestTimer !== null && activeRestTimer > 0;
+                      const restDisplay = isActivelyResting
+                        ? formatRestTime(activeRestTimer)
+                        : (set.restTime && set.restTime > 0 ? formatRestTime(set.restTime) : null);
+                      if (!restDisplay) return null;
+                      return (
+                        <View style={styles.setRestBadge}>
+                          <Ionicons
+                            name="timer-outline"
+                            size={13}
+                            color={isActivelyResting ? theme.primary : theme.textTertiary}
+                          />
+                          <Text
+                            style={[
+                              styles.setRestText,
+                              { color: isActivelyResting ? theme.primary : theme.textSecondary },
+                            ]}
+                          >
+                            {restDisplay}
+                          </Text>
+                        </View>
+                      );
+                    })()}
                   </TouchableOpacity>
                 </View>
               );
@@ -629,14 +643,17 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
             </Text>
             <TextInput
               style={[styles.entryInputText, { color: theme.text }]}
-              placeholder="0"
+              placeholder={placeholders.weight || '0'}
               placeholderTextColor={theme.textTertiary}
               keyboardType="numeric"
-              value={entryVals.weight}
+              value={draftInputs[exercise.id]?.weight ?? ''}
               onChangeText={(txt) => {
                 setDraftInputs((prev) => ({
                   ...prev,
-                  [exercise.id]: { ...entryVals, weight: txt },
+                  [exercise.id]: {
+                    weight: txt,
+                    reps: prev[exercise.id]?.reps ?? '',
+                  },
                 }));
               }}
             />
@@ -646,14 +663,17 @@ const ActiveWorkoutScreen: React.FC<ActiveWorkoutScreenProps> = ({ onBack }) => 
             <Text style={[styles.entryInputPrefix, { color: theme.textSecondary }]}>REPS</Text>
             <TextInput
               style={[styles.entryInputText, { color: theme.text }]}
-              placeholder="0"
+              placeholder={placeholders.reps || '0'}
               placeholderTextColor={theme.textTertiary}
               keyboardType="number-pad"
-              value={entryVals.reps}
+              value={draftInputs[exercise.id]?.reps ?? ''}
               onChangeText={(txt) => {
                 setDraftInputs((prev) => ({
                   ...prev,
-                  [exercise.id]: { ...entryVals, reps: txt },
+                  [exercise.id]: {
+                    weight: prev[exercise.id]?.weight ?? '',
+                    reps: txt,
+                  },
                 }));
               }}
             />
@@ -1181,18 +1201,9 @@ const styles = StyleSheet.create({
   subLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 6,
-    marginBottom: 8,
-  },
-  subLineLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    flexWrap: 'wrap',
-  },
-  subLineText: {
-    fontSize: 13,
+    justifyContent: 'flex-end',
+    marginTop: 4,
+    marginBottom: 6,
   },
   warmupPill: {
     paddingVertical: 3,
@@ -1232,7 +1243,20 @@ const styles = StyleSheet.create({
   loggedSetContent: {
     flex: 1,
     height: 32,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 6,
+  },
+  setRestBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  setRestText: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
   },
   setLabelBadge: {
     width: 22,

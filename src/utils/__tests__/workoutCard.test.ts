@@ -2,6 +2,7 @@ import {
   getSetNumbering,
   getLastWorkoutTopSet,
   formatTopSetDisplay,
+  formatRestTime,
 } from '../workoutCard';
 
 describe('workoutCard getSetNumbering and warmup toggling', () => {
@@ -69,5 +70,22 @@ describe('workoutCard getSetNumbering and warmup toggling', () => {
     sets[2].isWarmup = false;
     numbering = getSetNumbering(sets);
     expect(numbering.map(n => n.label)).toEqual(['1', '2', '3']);
+  });
+
+  describe('formatRestTime', () => {
+    it('returns empty string for 0, negative, or undefined seconds', () => {
+      expect(formatRestTime(0)).toBe('');
+      expect(formatRestTime(-5)).toBe('');
+      expect(formatRestTime(undefined)).toBe('');
+    });
+
+    it('formats seconds into m:ss format correctly', () => {
+      expect(formatRestTime(30)).toBe('0:30');
+      expect(formatRestTime(45)).toBe('0:45');
+      expect(formatRestTime(60)).toBe('1:00');
+      expect(formatRestTime(90)).toBe('1:30');
+      expect(formatRestTime(120)).toBe('2:00');
+      expect(formatRestTime(185)).toBe('3:05');
+    });
   });
 });

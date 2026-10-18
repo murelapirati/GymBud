@@ -118,3 +118,13 @@ export function formatTopSetDisplay(
 
   return `${rounded} ${unit} x ${topSet.reps}`;
 }
+
+/**
+ * Formats rest duration in seconds into a clean "m:ss" string (e.g. 90 -> "1:30").
+ */
+export function formatRestTime(seconds?: number): string {
+  if (!seconds || seconds <= 0) return '';
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
